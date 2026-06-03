@@ -5,3 +5,4 @@ yfinance
 plotly
 beautifulsoup4
 gspread
+matplotlib
