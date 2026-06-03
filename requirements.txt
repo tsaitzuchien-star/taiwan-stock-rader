@@ -1,4 +1,7 @@
-pandas
 streamlit
-twstock
+pandas
 requests
+yfinance
+plotly
+beautifulsoup4
+gspread
