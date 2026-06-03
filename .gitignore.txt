@@ -1,0 +1,3 @@
+google_key.json
+scan_log.json
+__pycache__/
