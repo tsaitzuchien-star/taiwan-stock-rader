@@ -14,10 +14,10 @@ from bs4 import BeautifulSoup
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V9.5 | 雙艙旗艦版", layout="wide", page_icon="📡")
+st.set_page_config(page_title="台股妖股雷達 V9.6 | 全自動戰術版", layout="wide", page_icon="📡")
 
 # ==========================================
-# 2. 戰情日誌記憶系統
+# 2. 戰情日誌與狀態記憶系統 (Session State)
 # ==========================================
 LOG_FILE = "scan_log.json"
 TODAY_STR = datetime.now().strftime("%Y/%m/%d")
@@ -37,6 +37,34 @@ def save_scan_log(log_data):
 
 scan_log = load_scan_log()
 
+# 定義四大戰術參數
+TACTICS = {
+    "🛠️ 自訂義模式": None,
+    "🌊 戰術一：深海潛艦 (經典起漲)": {"p": 50.0, "v": 1000, "tv": 500, "pm": 4.0, "sqz": True, "ma": True, "gap": False, "wash": False},
+    "🌋 戰術二：大怒神 (極端洗盤)": {"p": 80.0, "v": 2000, "tv": 1500, "pm": 2.5, "sqz": False, "ma": False, "gap": False, "wash": True},
+    "⚡ 戰術三：閃電戰 (跳空突破)": {"p": 50.0, "v": 1000, "tv": 500, "pm": 2.5, "sqz": True, "ma": False, "gap": True, "wash": False},
+    "🐂 戰術四：老牛翻身 (穩健推升)": {"p": 100.0, "v": 3000, "tv": 1000, "pm": 2.0, "sqz": False, "ma": True, "gap": False, "wash": False}
+}
+
+# 初始化 UI 狀態
+for key, default in [("p_limit", 50.0), ("v_limit", 1000), ("tv_limit", 300), ("pm_limit", 3.0),
+                     ("sqz_chk", False), ("ma_chk", True), ("gap_chk", False), ("wash_chk", False)]:
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+def apply_tactic():
+    selected = st.session_state.tactic_selector
+    if TACTICS[selected]:
+        cfg = TACTICS[selected]
+        st.session_state.p_limit = cfg["p"]
+        st.session_state.v_limit = cfg["v"]
+        st.session_state.tv_limit = cfg["tv"]
+        st.session_state.pm_limit = cfg["pm"]
+        st.session_state.sqz_chk = cfg["sqz"]
+        st.session_state.ma_chk = cfg["ma"]
+        st.session_state.gap_chk = cfg["gap"]
+        st.session_state.wash_chk = cfg["wash"]
+
 # ==========================================
 # 3. 企業級視覺 CSS
 # ==========================================
@@ -53,9 +81,8 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] { background-color: #1e293b; border-radius: 8px 8px 0px 0px; padding: 10px 20px; color: #8b92a5; border: 1px solid #2b313f; border-bottom: none; }
     .stTabs [aria-selected="true"] { background-color: #FF00FF !important; color: white !important; font-weight: bold; }
-    .stSelectbox label, .stTextInput label { color: #3b82f6 !important; font-weight: bold; font-size: 1.1rem !important; }
+    .stSelectbox label, .stTextInput label, .stRadio label { color: #3b82f6 !important; font-weight: bold; font-size: 1.1rem !important; }
     div[data-baseweb="select"] > div, div[data-baseweb="input"] > div { background-color: #1e293b !important; border: 1px solid #3b82f6 !important; }
-    div[data-baseweb="select"] *, div[data-baseweb="input"] * { color: #00FF41 !important; font-weight: bold !important; }
     div.stButton > button { background-color: #1e293b !important; color: #FF00FF !important; border: 1px solid #FF00FF !important; font-weight: bold !important; font-size: 1.1rem !important; transition: all 0.3s ease; }
     div.stButton > button:hover { background-color: #FF00FF !important; color: #ffffff !important; box-shadow: 0 0 10px rgba(255, 0, 255, 0.5) !important; }
     </style>
@@ -101,16 +128,16 @@ if pure_stocks:
 # ==========================================
 # 5. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>⚡ 台股妖股雷達 <span style='color: #FFD700;'>V9.5</span> <span style='font-size: 0.5em; color: #8b92a5;'>(雙艙旗艦版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>⚡ 台股妖股雷達 <span style='color: #FFD700;'>V9.6</span> <span style='font-size: 0.5em; color: #8b92a5;'>(全自動戰術版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 瑋婷總監 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
 TOTAL_CAPITAL = 1170000
-MAX_RISK_PCT = 0.05 # 5% 曝險
+MAX_RISK_PCT = 0.05 
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "雙艙作戰系統上線", delta="鐵血防線啟動", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V9.6 戰術模組上線", delta="鐵血防線啟動", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
@@ -149,7 +176,7 @@ def draw_plotly_chart(df_chart, stock_name):
     st.plotly_chart(fig, use_container_width=True)
 
 # ==========================================
-# 7. 雙艙切換系統 (V9.5 核心)
+# 7. 雙艙切換系統
 # ==========================================
 tab1, tab2 = st.tabs(["📡 第一艙：大範圍妖股雷達", "🎯 第二艙：自選股狙擊追蹤"])
 
@@ -158,22 +185,26 @@ tab1, tab2 = st.tabs(["📡 第一艙：大範圍妖股雷達", "🎯 第二艙�
 # ------------------------------------------
 with tab1:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
+    
+    # 戰術選擇器
+    st.radio("🎯 快速戰術套用 (點擊自動調整下方參數)：", list(TACTICS.keys()), horizontal=True, key="tactic_selector", on_change=apply_tactic)
+    st.markdown("<hr style='border-color: #2b313f; margin-top: 5px; margin-bottom: 15px;'>", unsafe_allow_html=True)
+    
     col1, col2, col3, col4 = st.columns(4)
-    with col1: price_limit = st.slider("💰 銅板股上限 (現價)", 10.0, 100.0, 50.0, step=1.0)
-    with col2: vol_limit = st.slider("💧 邊緣人指數 (月均量)", 10, 2000, 1000, step=10) 
-    with col3: min_today_vol = st.slider("🛡️ 活水底線 (今日成交)", 100, 2000, 300, step=50) 
-    with col4: power_multiplier = st.slider("🔥 核彈級爆發 (倍數)", 2.0, 15.0, 3.0, step=0.5)
-
-    st.markdown("<hr style='border-color: #2b313f; margin-top: 10px; margin-bottom: 10px;'>", unsafe_allow_html=True)
-    col_chk1, col_chk2, col_chk3, col_chk4 = st.columns(4)
-    with col_chk1: squeeze_filter = st.checkbox("✅ 啟動【布林帶壓縮】(<15%)", value=False, key="sqz") 
-    with col_chk2: ma_filter = st.checkbox("✅ 啟動【月季線糾結】(<3%)", value=True, key="ma")
-    with col_chk3: gap_filter = st.checkbox("✅ 啟動【主力跳空開高】(>2%)", value=False, key="gap") 
-    with col_chk4: washout_filter = st.checkbox("🚨 鎖定【極端洗盤換手】(振幅>12%)", value=False, key="wash")
-    st.markdown("<div style='color:#8b92a5; font-size: 0.9em; margin-top:10px;'>💡 提示：勾選並調整滑桿，下方名單會【瞬間】套用篩選！</div>", unsafe_allow_html=True)
+    with col1: price_limit = st.slider("💰 銅板股上限 (現價)", 10.0, 150.0, st.session_state.p_limit, step=1.0, key="p_limit")
+    with col2: vol_limit = st.slider("💧 邊緣人指數 (月均量)", 10, 5000, st.session_state.v_limit, step=10, key="v_limit") 
+    with col3: min_today_vol = st.slider("🛡️ 活水底線 (今日成交)", 100, 3000, st.session_state.tv_limit, step=50, key="tv_limit") 
+    with col4: power_multiplier = st.slider("🔥 核彈級爆發 (倍數)", 1.5, 15.0, st.session_state.pm_limit, step=0.5, key="pm_limit")
 
     st.markdown("<br>", unsafe_allow_html=True)
-    col_batch, col_btn_run, col_btn_reset = st.columns([2, 1.5, 1.5])
+    col_chk1, col_chk2, col_chk3, col_chk4 = st.columns(4)
+    with col_chk1: squeeze_filter = st.checkbox("✅ 啟動【布林帶壓縮】(<15%)", key="sqz_chk") 
+    with col_chk2: ma_filter = st.checkbox("✅ 啟動【月季線糾結】(<3%)", key="ma_chk")
+    with col_chk3: gap_filter = st.checkbox("✅ 啟動【主力跳空開高】(>2%)", key="gap_chk") 
+    with col_chk4: washout_filter = st.checkbox("🚨 鎖定【極端洗盤換手】(振幅>12%)", key="wash_chk")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    col_batch, col_btn_run, col_btn_shower = st.columns([1.5, 1, 1.5])
     
     def format_batch_display(opt):
         return f"🟢 {opt} ── [✅ 已掃描]" if opt in scan_log else f"⚪ {opt}"
@@ -184,13 +215,12 @@ with tab1:
 
     with col_btn_run: 
         st.markdown("<br>", unsafe_allow_html=True)
-        run_scan_btn = st.button("🚀 發起 V9.5 實彈掃描", use_container_width=True)
-    with col_btn_reset: 
+        run_scan_btn = st.button("🚀 單一部隊掃描", use_container_width=True)
+    with col_btn_shower: 
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("🧹 清除快取 (重置系統)", use_container_width=True, key="btn_clear1"): 
-            st.cache_data.clear()
-            st.session_state.clear()
-            st.rerun()
+        # 這是您專屬的洗澡掛機按鈕
+        shower_mode_btn = st.button("🛁 洗澡模式 (掛機全掃描分類)", use_container_width=True)
+        
     st.markdown("</div>", unsafe_allow_html=True)
 
     def execute_radar_scan(batch_name, stock_list, twse_set, names_dict):
@@ -254,111 +284,128 @@ with tab1:
         status_text.empty(); progress_bar.empty()
         return pd.DataFrame(data_list)
 
+    # 處理單次掃描按鈕
     if run_scan_btn:
-        with st.spinner(f"🚀 啟動 V9.5 主引擎掃描中..."):
+        with st.spinner(f"🚀 啟動單一部隊掃描中..."):
             df_result = execute_radar_scan(batch_choice, pure_stocks, twse_set, stock_names_dict)
             st.session_state.master_df = df_result
             st.session_state.master_batch = batch_choice
+            st.session_state.is_shower_mode = False
             scan_log[batch_choice] = datetime.now().strftime("%Y/%m/%d %H:%M")
             save_scan_log(scan_log)
             st.rerun()
 
-    if "master_df" in st.session_state and st.session_state.master_batch == batch_choice:
+    # 處理洗澡模式按鈕
+    if shower_mode_btn:
+        with st.spinner(f"🛁 洗澡模式啟動！正在進行全市場總掃描，請安心去洗澡，約需 10 分鐘..."):
+            df_result = execute_radar_scan("🌟 全市場總掃描 (約需 3~5 分鐘，建議使用)", pure_stocks, twse_set, stock_names_dict)
+            st.session_state.master_df = df_result
+            st.session_state.master_batch = "🌟 全市場總掃描 (約需 3~5 分鐘，建議使用)"
+            st.session_state.is_shower_mode = True # 標記為洗澡模式，開啟多戰術展示
+            scan_log["🌟 全市場總掃描 (約需 3~5 分鐘，建議使用)"] = datetime.now().strftime("%Y/%m/%d %H:%M")
+            save_scan_log(scan_log)
+            st.rerun()
+
+    # 畫面渲染邏輯
+    if "master_df" in st.session_state:
         df_market = st.session_state.master_df
         
-        # 🛡️ 鐵血防線：追加 (df_market['現價(元)'] > df_market['季線位置']) 過濾條件
-        mask = (df_market['現價(元)'] <= price_limit) & \
-               (df_market['今日成交(張)'] >= min_today_vol) & \
-               (df_market['月均量(20日)'] <= vol_limit) & \
-               (df_market['月量爆發倍數'] >= power_multiplier) & \
-               (df_market['_is_fake'] == False) & \
-               (df_market['現價(元)'] > df_market['季線位置'])
-               
-        if squeeze_filter: mask = mask & (df_market['布林帶寬(%)'] <= 15)
-        if ma_filter: mask = mask & (df_market['均線糾結(%)'] <= 3)
-        if gap_filter: mask = mask & (df_market['跳空缺口(%)'] >= 2.0)
-        if washout_filter: mask = mask & (df_market['_is_washout'] == True)
+        # 定義格式化函數
+        def apply_mask_and_style(df, cfg):
+            # 鐵血防線必定開啟：大於季線 且 排除假突破
+            mask = (df['現價(元)'] <= cfg['p']) & (df['今日成交(張)'] >= cfg['tv']) & \
+                   (df['月均量(20日)'] <= cfg['v']) & (df['月量爆發倍數'] >= cfg['pm']) & \
+                   (df['_is_fake'] == False) & (df['現價(元)'] > df['季線位置'])
+            if cfg['sqz']: mask = mask & (df['布林帶寬(%)'] <= 15)
+            if cfg['ma']: mask = mask & (df['均線糾結(%)'] <= 3)
+            if cfg['gap']: mask = mask & (df['跳空缺口(%)'] >= 2.0)
+            if cfg['wash']: mask = mask & (df['_is_washout'] == True)
             
-        demon_stocks = df_market[mask].drop(columns=['_is_fake', '_is_washout']).drop_duplicates(subset=['股票代號']).reset_index(drop=True)
-        
-        if not demon_stocks.empty:
-            st.write("---")
-            styled_df = demon_stocks.style.format({
-                '現價(元)': "{:.2f}", '今日漲跌(%)': "{:.2f}%", '日內振幅(%)': "{:.2f}%", 
-                '月均量(20日)': "{:,.0f}", '今日成交(張)': "{:,.0f}", 
-                '月量爆發倍數': "{:.1f}x", '跳空缺口(%)': "{:.2f}%", 
-                '布林帶寬(%)': "{:.2f}%", '均線糾結(%)': "{:.2f}%",
-                '季線位置': "{:.2f}"
-            }).background_gradient(subset=['月量爆發倍數', '日內振幅(%)'], cmap='Purples')
-            st.dataframe(styled_df, use_container_width=True)
-            
-            st.write("---")
-            st.markdown("<h2>📊 X 光透視與情報探測</h2>", unsafe_allow_html=True)
-            stock_options = [f"{row['股票代號']} - {row['股票名稱']}" for _, row in demon_stocks.iterrows()]
-            selected_stock_str = st.selectbox("🎯 選擇標的：", stock_options, key="sel1")
-            
-            # 🛡️ 加入 try-except 防止 UI 異常引發紅色空白方塊
-            try:
-                selected_id, selected_name = selected_stock_str.split(" - ")[0], selected_stock_str.split(" - ")[1]
-                current_price = demon_stocks[demon_stocks['股票代號'] == selected_id]['現價(元)'].values[0]
-                max_buyable_lots = int(MAX_EXPOSURE // (current_price * 1000))
-                
-                with st.spinner(f"🕵️‍♂️ 調閱情報檔案..."): 
-                    heat_index = get_ptt_shoeshine_index(selected_name)
-                
-                st.markdown("<div class='shoeshine-panel'>", unsafe_allow_html=True)
-                st.markdown("#### 🕵️‍♂️ 擦鞋童警報器 (PTT 散戶狂熱指數)")
-                if heat_index == -1: st.warning("⚠️ 情報網連線異常，無法取得 PTT 資料。")
-                elif heat_index <= 2: st.success(f"🟢 **【完美潛伏期】** PTT 討論僅 {heat_index} 篇！主力偷偷吃貨中。")
-                elif heat_index <= 9: st.warning(f"🟡 **【發酵警戒區】** PTT 討論達 {heat_index} 篇。消息走漏，請嚴守紀律。")
-                else: st.error(f"🔴 **【擦鞋童核爆區】** PTT 討論高達 {heat_index} 篇！禁止買進！")
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-                if max_buyable_lots >= 1: 
-                    st.success(f"⚖️ **財務總監審批通過：** 現價 {current_price:.2f} 元，最高授權購買 **{max_buyable_lots} 張**。")
-                else: 
-                    st.error(f"⚖️ **🚨 財務總監拒絕授權：** 現價 {current_price:.2f} 元，買一張已超標 ({int(MAX_EXPOSURE):,} 元)！")
-                
-                with st.spinner(f"展開 K 線圖..."):
-                    is_otc = False if not twse_set else (selected_id not in twse_set)
-                    df_chart = get_kline_data(selected_id, is_otc)
-                    if not df_chart.empty: 
-                        draw_plotly_chart(df_chart, selected_name)
-                    else:
-                        st.warning("⚠️ 系統提示：無法取得該檔股票的歷史 K 線資料，可能為剛上市櫃或 API 異常。")
+            res_df = df[mask].drop(columns=['_is_fake', '_is_washout']).drop_duplicates(subset=['股票代號']).reset_index(drop=True)
+            if not res_df.empty:
+                return res_df.style.format({
+                    '現價(元)': "{:.2f}", '今日漲跌(%)': "{:.2f}%", '日內振幅(%)': "{:.2f}%", 
+                    '月均量(20日)': "{:,.0f}", '今日成交(張)': "{:,.0f}", 
+                    '月量爆發倍數': "{:.1f}x", '跳空缺口(%)': "{:.2f}%", 
+                    '布林帶寬(%)': "{:.2f}%", '均線糾結(%)': "{:.2f}%", '季線位置': "{:.2f}"
+                }).background_gradient(subset=['月量爆發倍數', '日內振幅(%)'], cmap='Purples')
+            return None
 
-                st.write("---")
-                if st.button("☁️ 總監核准，將清單備份至【雲端戰情庫】", use_container_width=True):
-                    with st.spinner("📡 正在上傳..."):
-                        try:
-                            import gspread
-                            # 讀取 Streamlit Secrets 中的金鑰資訊
-                            gcp_credentials = dict(st.secrets["gcp_service_account"])
-                            client = gspread.service_account_from_dict(gcp_credentials)
-                            sheet = client.open("妖股雷達_戰情觀測庫").sheet1
-                            upload_data = []
-                            current_time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-                            for index, row in demon_stocks.iterrows():
-                                row_heat = get_ptt_shoeshine_index(row['股票名稱'])
-                                heat_note = f"PTT熱度: {row_heat} 篇" if row_heat >= 0 else "PTT熱度: 異常"
-                                if row_heat > 9: heat_note += " (高危險)"
-                                upload_data.append([
-                                    current_time, str(row['股票名稱']), str(row['股票代號']), 
-                                    float(row['現價(元)']), float(row['今日漲跌(%)']), float(row['日內振幅(%)']),
-                                    int(row['月均量(20日)']), int(row['今日成交(張)']), float(row['月量爆發倍數']), 
-                                    float(row['跳空缺口(%)']), float(row['布林帶寬(%)']), float(row['均線糾結(%)']), 
-                                    str(row['強力洗盤訊號']), heat_note
-                                ])
-                            sheet.append_rows(upload_data, value_input_option='USER_ENTERED')
-                            st.success(f"✅ 成功將情報備份至雲端！")
-                            st.balloons()
-                        except Exception as e: st.error(f"❌ 上傳失敗，請確認 Secret 金鑰設定：{e}")
-                        
-            except Exception as e:
-                st.error(f"⚠️ 解析該檔標的時發生系統異常：{str(e)}")
+        # 渲染洗澡模式 (多戰術分頁)
+        if st.session_state.get("is_shower_mode", False):
+            st.success("🛁 洗澡模式掃描完畢！以下為全市場套用四大戰術的分類結果：")
+            st.write("---")
+            t1, t2, t3, t4 = st.tabs(["🌊 戰術一：深海潛艦", "🌋 戰術二：大怒神", "⚡ 戰術三：閃電戰", "🐂 戰術四：老牛翻身"])
+            
+            with t1:
+                res1 = apply_mask_and_style(df_market, TACTICS["🌊 戰術一：深海潛艦 (經典起漲)"])
+                if res1: st.dataframe(res1, use_container_width=True)
+                else: st.info("🛡️ 今日無符合【深海潛艦】型態之標的。")
+            with t2:
+                res2 = apply_mask_and_style(df_market, TACTICS["🌋 戰術二：大怒神 (極端洗盤)"])
+                if res2: st.dataframe(res2, use_container_width=True)
+                else: st.info("🛡️ 今日無符合【大怒神】型態之標的。")
+            with t3:
+                res3 = apply_mask_and_style(df_market, TACTICS["⚡ 戰術三：閃電戰 (跳空突破)"])
+                if res3: st.dataframe(res3, use_container_width=True)
+                else: st.info("🛡️ 今日無符合【閃電戰】型態之標的。")
+            with t4:
+                res4 = apply_mask_and_style(df_market, TACTICS["🐂 戰術四：老牛翻身 (穩健推升)"])
+                if res4: st.dataframe(res4, use_container_width=True)
+                else: st.info("🛡️ 今日無符合【老牛翻身】型態之標的。")
                 
-        else: st.info("🛡️ 無符合設定的股票。 (提示：鐵血防線已啟動，股價跌破季線者將全數遭剔除)")
-    elif "master_df" in st.session_state: st.info("⚠️ 您已切換部隊，請點擊【🚀 發起實彈掃描】！")
+        # 渲染一般模式 (單一設定)
+        else:
+            cfg_custom = {
+                'p': price_limit, 'v': vol_limit, 'tv': min_today_vol, 'pm': power_multiplier,
+                'sqz': squeeze_filter, 'ma': ma_filter, 'gap': gap_filter, 'wash': washout_filter
+            }
+            res_custom = apply_mask_and_style(df_market, cfg_custom)
+            if res_custom:
+                st.write("---")
+                st.dataframe(res_custom, use_container_width=True)
+            else:
+                st.info("🛡️ 無符合設定的股票。 (提示：鐵血防線已啟動，股價跌破季線者將全數遭剔除)")
+            
+        # 情報探測器 (共用於兩種模式)
+        st.write("---")
+        st.markdown("<h2>📊 X 光透視與情報探測</h2>", unsafe_allow_html=True)
+        # 把所有選出來的股票整合到下拉選單
+        available_stocks = df_market[df_market['現價(元)'] > df_market['季線位置']] # 只讓站上季線的進選單
+        stock_options = [f"{row['股票代號']} - {row['股票名稱']}" for _, row in available_stocks.iterrows()]
+        selected_stock_str = st.selectbox("🎯 選擇欲進行深度 X 光探測的標的：", stock_options, key="sel1")
+        
+        try:
+            selected_id, selected_name = selected_stock_str.split(" - ")[0], selected_stock_str.split(" - ")[1]
+            current_price = available_stocks[available_stocks['股票代號'] == selected_id]['現價(元)'].values[0]
+            max_buyable_lots = int(MAX_EXPOSURE // (current_price * 1000))
+            
+            with st.spinner(f"🕵️‍♂️ 調閱情報檔案..."): 
+                heat_index = get_ptt_shoeshine_index(selected_name)
+            
+            st.markdown("<div class='shoeshine-panel'>", unsafe_allow_html=True)
+            st.markdown("#### 🕵️‍♂️ 擦鞋童警報器 (PTT 散戶狂熱指數)")
+            if heat_index == -1: st.warning("⚠️ 情報網連線異常，無法取得 PTT 資料。")
+            elif heat_index <= 2: st.success(f"🟢 **【完美潛伏期】** PTT 討論僅 {heat_index} 篇！主力偷偷吃貨中。")
+            elif heat_index <= 9: st.warning(f"🟡 **【發酵警戒區】** PTT 討論達 {heat_index} 篇。消息走漏，請嚴守紀律。")
+            else: st.error(f"🔴 **【擦鞋童核爆區】** PTT 討論高達 {heat_index} 篇！禁止買進！")
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            if max_buyable_lots >= 1: 
+                st.success(f"⚖️ **財務總監審批通過：** 現價 {current_price:.2f} 元，最高授權購買 **{max_buyable_lots} 張**。")
+            else: 
+                st.error(f"⚖️ **🚨 財務總監拒絕授權：** 現價 {current_price:.2f} 元，買一張已超標 ({int(MAX_EXPOSURE):,} 元)！")
+            
+            with st.spinner(f"展開 K 線圖..."):
+                is_otc = False if not twse_set else (selected_id not in twse_set)
+                df_chart = get_kline_data(selected_id, is_otc)
+                if not df_chart.empty: 
+                    draw_plotly_chart(df_chart, selected_name)
+                else:
+                    st.warning("⚠️ 系統提示：無法取得該檔股票的歷史 K 線資料，可能為剛上市櫃或 API 異常。")
+
+        except Exception as e:
+            st.error(f"⚠️ 解析該檔標的時發生系統異常：{str(e)}")
 
 # ------------------------------------------
 # 第二艙：單點狙擊追蹤
@@ -382,7 +429,6 @@ with tab2:
             target_name = stock_names_dict[target_code]
             st.markdown(f"<h2>📊 【{target_code} {target_name}】 專案追蹤報告</h2>", unsafe_allow_html=True)
             
-            # 🛡️ 加入 try-except 防止 UI 異常
             try:
                 with st.spinner(f"🕵️‍♂️ 探測 {target_name} 的散戶熱度..."):
                     heat_index = get_ptt_shoeshine_index(target_name)
@@ -410,7 +456,7 @@ with tab2:
                         
                         draw_plotly_chart(df_chart, target_name)
                     else:
-                        st.warning("⚠️ 系統提示：無法取得該檔股票的歷史 K 線資料，可能為剛上市櫃或 API 異常。")
+                        st.warning("⚠️ 系統提示：無法取得該檔股票的歷史 K 線資料。")
                         
             except Exception as e:
                 st.error(f"⚠️ 解析該檔標的時發生系統異常：{str(e)}")
