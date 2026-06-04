@@ -106,11 +106,11 @@ st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 瑋婷總監 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
 TOTAL_CAPITAL = 1170000
-MAX_RISK_PCT = 0.05 # 放寬為 5%
+MAX_RISK_PCT = 0.05 # 5% 曝險
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "雙艙作戰系統上線", delta="滿配防護中", delta_color="normal")
+rc3.metric("🚦 系統狀態", "雙艙作戰系統上線", delta="鐵血防線啟動", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
@@ -154,7 +154,7 @@ def draw_plotly_chart(df_chart, stock_name):
 tab1, tab2 = st.tabs(["📡 第一艙：大範圍妖股雷達", "🎯 第二艙：自選股狙擊追蹤"])
 
 # ------------------------------------------
-# 第一艙：妖股雷達 (原有 V9.4 掃描功能)
+# 第一艙：妖股雷達
 # ------------------------------------------
 with tab1:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
@@ -232,9 +232,7 @@ with tab1:
                     gap_up_pct = ((latest['Open'] - yesterday['Close']) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
                     is_fake = (latest['High'] - max(latest['Open'], close_p)) > abs(close_p - latest['Open'])
                     
-                    # 日內振幅監控邏輯
                     amplitude = ((latest['High'] - latest['Low']) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
-                    # 判斷是否為強力洗盤：振幅 >= 12%、量能 >= 5日均量3倍、收盤價 >= 當日均價
                     is_washout = (amplitude >= 12.0) and (today_vol >= vol5 * 3) and (close_p >= (latest['High'] + latest['Low']) / 2)
                     
                     data_list.append({
@@ -245,6 +243,7 @@ with tab1:
                         '月量爆發倍數': round(today_vol / vol20, 1) if vol20 > 0 else 0,
                         '跳空缺口(%)': round(gap_up_pct, 2), '布林帶寬(%)': round(bandwidth, 2),
                         '均線糾結(%)': round(ma_diff, 2), 
+                        '季線位置': round(ma60, 2),
                         '強力洗盤訊號': '🚨 觸發' if is_washout else '-',
                         '_is_fake': is_fake,
                         '_is_washout': is_washout
@@ -266,7 +265,15 @@ with tab1:
 
     if "master_df" in st.session_state and st.session_state.master_batch == batch_choice:
         df_market = st.session_state.master_df
-        mask = (df_market['現價(元)'] <= price_limit) & (df_market['今日成交(張)'] >= min_today_vol) & (df_market['月均量(20日)'] <= vol_limit) & (df_market['月量爆發倍數'] >= power_multiplier) & (df_market['_is_fake'] == False)
+        
+        # 🛡️ 鐵血防線：追加 (df_market['現價(元)'] > df_market['季線位置']) 過濾條件
+        mask = (df_market['現價(元)'] <= price_limit) & \
+               (df_market['今日成交(張)'] >= min_today_vol) & \
+               (df_market['月均量(20日)'] <= vol_limit) & \
+               (df_market['月量爆發倍數'] >= power_multiplier) & \
+               (df_market['_is_fake'] == False) & \
+               (df_market['現價(元)'] > df_market['季線位置'])
+               
         if squeeze_filter: mask = mask & (df_market['布林帶寬(%)'] <= 15)
         if ma_filter: mask = mask & (df_market['均線糾結(%)'] <= 3)
         if gap_filter: mask = mask & (df_market['跳空缺口(%)'] >= 2.0)
@@ -280,7 +287,8 @@ with tab1:
                 '現價(元)': "{:.2f}", '今日漲跌(%)': "{:.2f}%", '日內振幅(%)': "{:.2f}%", 
                 '月均量(20日)': "{:,.0f}", '今日成交(張)': "{:,.0f}", 
                 '月量爆發倍數': "{:.1f}x", '跳空缺口(%)': "{:.2f}%", 
-                '布林帶寬(%)': "{:.2f}%", '均線糾結(%)': "{:.2f}%"
+                '布林帶寬(%)': "{:.2f}%", '均線糾結(%)': "{:.2f}%",
+                '季線位置': "{:.2f}"
             }).background_gradient(subset=['月量爆發倍數', '日內振幅(%)'], cmap='Purples')
             st.dataframe(styled_df, use_container_width=True)
             
@@ -288,58 +296,72 @@ with tab1:
             st.markdown("<h2>📊 X 光透視與情報探測</h2>", unsafe_allow_html=True)
             stock_options = [f"{row['股票代號']} - {row['股票名稱']}" for _, row in demon_stocks.iterrows()]
             selected_stock_str = st.selectbox("🎯 選擇標的：", stock_options, key="sel1")
-            selected_id, selected_name = selected_stock_str.split(" - ")[0], selected_stock_str.split(" - ")[1]
             
-            current_price = demon_stocks[demon_stocks['股票代號'] == selected_id]['現價(元)'].values[0]
-            max_buyable_lots = int(MAX_EXPOSURE // (current_price * 1000))
-            
-            with st.spinner(f"🕵️‍♂️ 調閱情報檔案..."): heat_index = get_ptt_shoeshine_index(selected_name)
-            
-            st.markdown("<div class='shoeshine-panel'>", unsafe_allow_html=True)
-            st.markdown("#### 🕵️‍♂️ 擦鞋童警報器 (PTT 散戶狂熱指數)")
-            if heat_index == -1: st.warning("⚠️ 情報網連線異常。")
-            elif heat_index <= 2: st.success(f"🟢 **【完美潛伏期】** PTT 討論僅 {heat_index} 篇！主力偷偷吃貨中。")
-            elif heat_index <= 9: st.warning(f"🟡 **【發酵警戒區】** PTT 討論達 {heat_index} 篇。消息走漏，請嚴守紀律。")
-            else: st.error(f"🔴 **【擦鞋童核爆區】** PTT 討論高達 {heat_index} 篇！禁止買進！")
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-            if max_buyable_lots >= 1: st.success(f"⚖️ **財務總監審批通過：** 現價 {current_price} 元，最高授權購買 **{max_buyable_lots} 張**。")
-            else: st.error(f"⚖️ **🚨 財務總監拒絕授權：** 已超標 (58,500 元)！")
-            
-            with st.spinner(f"展開 K 線圖..."):
-                is_otc = False if not twse_set else (selected_id not in twse_set)
-                df_chart = get_kline_data(selected_id, is_otc)
-                if not df_chart.empty: draw_plotly_chart(df_chart, selected_name)
+            # 🛡️ 加入 try-except 防止 UI 異常引發紅色空白方塊
+            try:
+                selected_id, selected_name = selected_stock_str.split(" - ")[0], selected_stock_str.split(" - ")[1]
+                current_price = demon_stocks[demon_stocks['股票代號'] == selected_id]['現價(元)'].values[0]
+                max_buyable_lots = int(MAX_EXPOSURE // (current_price * 1000))
+                
+                with st.spinner(f"🕵️‍♂️ 調閱情報檔案..."): 
+                    heat_index = get_ptt_shoeshine_index(selected_name)
+                
+                st.markdown("<div class='shoeshine-panel'>", unsafe_allow_html=True)
+                st.markdown("#### 🕵️‍♂️ 擦鞋童警報器 (PTT 散戶狂熱指數)")
+                if heat_index == -1: st.warning("⚠️ 情報網連線異常，無法取得 PTT 資料。")
+                elif heat_index <= 2: st.success(f"🟢 **【完美潛伏期】** PTT 討論僅 {heat_index} 篇！主力偷偷吃貨中。")
+                elif heat_index <= 9: st.warning(f"🟡 **【發酵警戒區】** PTT 討論達 {heat_index} 篇。消息走漏，請嚴守紀律。")
+                else: st.error(f"🔴 **【擦鞋童核爆區】** PTT 討論高達 {heat_index} 篇！禁止買進！")
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+                if max_buyable_lots >= 1: 
+                    st.success(f"⚖️ **財務總監審批通過：** 現價 {current_price:.2f} 元，最高授權購買 **{max_buyable_lots} 張**。")
+                else: 
+                    st.error(f"⚖️ **🚨 財務總監拒絕授權：** 現價 {current_price:.2f} 元，買一張已超標 ({int(MAX_EXPOSURE):,} 元)！")
+                
+                with st.spinner(f"展開 K 線圖..."):
+                    is_otc = False if not twse_set else (selected_id not in twse_set)
+                    df_chart = get_kline_data(selected_id, is_otc)
+                    if not df_chart.empty: 
+                        draw_plotly_chart(df_chart, selected_name)
+                    else:
+                        st.warning("⚠️ 系統提示：無法取得該檔股票的歷史 K 線資料，可能為剛上市櫃或 API 異常。")
 
-            st.write("---")
-            if st.button("☁️ 總監核准，將清單備份至【雲端戰情庫】", use_container_width=True):
-                with st.spinner("📡 正在上傳..."):
-                    try:
-                        import gspread
-                        client = gspread.service_account(filename="google_key.json")
-                        sheet = client.open("妖股雷達_戰情觀測庫").sheet1
-                        upload_data = []
-                        current_time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-                        for index, row in demon_stocks.iterrows():
-                            row_heat = get_ptt_shoeshine_index(row['股票名稱'])
-                            heat_note = f"PTT熱度: {row_heat} 篇" if row_heat >= 0 else "PTT熱度: 異常"
-                            if row_heat > 9: heat_note += " (高危險)"
-                            upload_data.append([
-                                current_time, str(row['股票名稱']), str(row['股票代號']), 
-                                float(row['現價(元)']), float(row['今日漲跌(%)']), float(row['日內振幅(%)']),
-                                int(row['月均量(20日)']), int(row['今日成交(張)']), float(row['月量爆發倍數']), 
-                                float(row['跳空缺口(%)']), float(row['布林帶寬(%)']), float(row['均線糾結(%)']), 
-                                str(row['強力洗盤訊號']), heat_note
-                            ])
-                        sheet.append_rows(upload_data, value_input_option='USER_ENTERED')
-                        st.success(f"✅ 成功將情報備份至雲端！")
-                        st.balloons()
-                    except Exception as e: st.error(f"❌ 上傳失敗，錯誤碼：{e}")
-        else: st.info("🛡️ 無符合設定的股票。請放寬條件！")
+                st.write("---")
+                if st.button("☁️ 總監核准，將清單備份至【雲端戰情庫】", use_container_width=True):
+                    with st.spinner("📡 正在上傳..."):
+                        try:
+                            import gspread
+                            # 讀取 Streamlit Secrets 中的金鑰資訊
+                            gcp_credentials = dict(st.secrets["gcp_service_account"])
+                            client = gspread.service_account_from_dict(gcp_credentials)
+                            sheet = client.open("妖股雷達_戰情觀測庫").sheet1
+                            upload_data = []
+                            current_time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+                            for index, row in demon_stocks.iterrows():
+                                row_heat = get_ptt_shoeshine_index(row['股票名稱'])
+                                heat_note = f"PTT熱度: {row_heat} 篇" if row_heat >= 0 else "PTT熱度: 異常"
+                                if row_heat > 9: heat_note += " (高危險)"
+                                upload_data.append([
+                                    current_time, str(row['股票名稱']), str(row['股票代號']), 
+                                    float(row['現價(元)']), float(row['今日漲跌(%)']), float(row['日內振幅(%)']),
+                                    int(row['月均量(20日)']), int(row['今日成交(張)']), float(row['月量爆發倍數']), 
+                                    float(row['跳空缺口(%)']), float(row['布林帶寬(%)']), float(row['均線糾結(%)']), 
+                                    str(row['強力洗盤訊號']), heat_note
+                                ])
+                            sheet.append_rows(upload_data, value_input_option='USER_ENTERED')
+                            st.success(f"✅ 成功將情報備份至雲端！")
+                            st.balloons()
+                        except Exception as e: st.error(f"❌ 上傳失敗，請確認 Secret 金鑰設定：{e}")
+                        
+            except Exception as e:
+                st.error(f"⚠️ 解析該檔標的時發生系統異常：{str(e)}")
+                
+        else: st.info("🛡️ 無符合設定的股票。 (提示：鐵血防線已啟動，股價跌破季線者將全數遭剔除)")
     elif "master_df" in st.session_state: st.info("⚠️ 您已切換部隊，請點擊【🚀 發起實彈掃描】！")
 
 # ------------------------------------------
-# 第二艙：單點狙擊追蹤 (V9.5 全新獨立系統)
+# 第二艙：單點狙擊追蹤
 # ------------------------------------------
 with tab2:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
@@ -360,33 +382,37 @@ with tab2:
             target_name = stock_names_dict[target_code]
             st.markdown(f"<h2>📊 【{target_code} {target_name}】 專案追蹤報告</h2>", unsafe_allow_html=True)
             
-            # PTT 探測器
-            with st.spinner(f"🕵️‍♂️ 探測 {target_name} 的散戶熱度..."):
-                heat_index = get_ptt_shoeshine_index(target_name)
-            
-            st.markdown("<div class='shoeshine-panel'>", unsafe_allow_html=True)
-            st.markdown("#### 🕵️‍♂️ 擦鞋童警報器 (PTT 散戶狂熱指數)")
-            if heat_index == -1: st.warning("⚠️ 情報網連線異常。")
-            elif heat_index <= 2: st.success(f"🟢 **【完美潛伏期】** PTT 討論僅 {heat_index} 篇！")
-            elif heat_index <= 9: st.warning(f"🟡 **【發酵警戒區】** PTT 討論達 {heat_index} 篇。消息走漏，請嚴守紀律。")
-            else: st.error(f"🔴 **【擦鞋童核爆區】** PTT 討論高達 {heat_index} 篇！總監協議：禁止買進！")
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-            # K線圖
-            with st.spinner(f"展開 {target_name} K 線圖..."):
-                is_otc = False if not twse_set else (target_code not in twse_set)
-                df_chart = get_kline_data(target_code, is_otc)
+            # 🛡️ 加入 try-except 防止 UI 異常
+            try:
+                with st.spinner(f"🕵️‍♂️ 探測 {target_name} 的散戶熱度..."):
+                    heat_index = get_ptt_shoeshine_index(target_name)
                 
-                if not df_chart.empty:
-                    # 抓取最新現價進行風控計算
-                    current_price = df_chart.iloc[-1]['Close']
-                    max_buyable_lots = int(MAX_EXPOSURE // (current_price * 1000))
+                st.markdown("<div class='shoeshine-panel'>", unsafe_allow_html=True)
+                st.markdown("#### 🕵️‍♂️ 擦鞋童警報器 (PTT 散戶狂熱指數)")
+                if heat_index == -1: st.warning("⚠️ 情報網連線異常。")
+                elif heat_index <= 2: st.success(f"🟢 **【完美潛伏期】** PTT 討論僅 {heat_index} 篇！")
+                elif heat_index <= 9: st.warning(f"🟡 **【發酵警戒區】** PTT 討論達 {heat_index} 篇。消息走漏，請嚴守紀律。")
+                else: st.error(f"🔴 **【擦鞋童核爆區】** PTT 討論高達 {heat_index} 篇！總監協議：禁止買進！")
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+                with st.spinner(f"展開 {target_name} K 線圖..."):
+                    is_otc = False if not twse_set else (target_code not in twse_set)
+                    df_chart = get_kline_data(target_code, is_otc)
                     
-                    if max_buyable_lots >= 1: st.success(f"⚖️ **財務總監審批通過：** 現價 {current_price:.2f} 元，最高授權購買 **{max_buyable_lots} 張**。")
-                    else: st.error(f"⚖️ **🚨 財務總監拒絕授權：** 現價 {current_price:.2f} 元，買一張已超標 (58,500 元)！")
-                    
-                    draw_plotly_chart(df_chart, target_name)
-                else:
-                    st.error("無法取得該檔股票的歷史 K 線資料。")
+                    if not df_chart.empty:
+                        current_price = df_chart.iloc[-1]['Close']
+                        max_buyable_lots = int(MAX_EXPOSURE // (current_price * 1000))
+                        
+                        if max_buyable_lots >= 1: 
+                            st.success(f"⚖️ **財務總監審批通過：** 現價 {current_price:.2f} 元，最高授權購買 **{max_buyable_lots} 張**。")
+                        else: 
+                            st.error(f"⚖️ **🚨 財務總監拒絕授權：** 現價 {current_price:.2f} 元，買一張已超標 ({int(MAX_EXPOSURE):,} 元)！")
+                        
+                        draw_plotly_chart(df_chart, target_name)
+                    else:
+                        st.warning("⚠️ 系統提示：無法取得該檔股票的歷史 K 線資料，可能為剛上市櫃或 API 異常。")
+                        
+            except Exception as e:
+                st.error(f"⚠️ 解析該檔標的時發生系統異常：{str(e)}")
         else:
             st.error(f"❌ 查無此代號：{target_code}，請確認是否為正規 4 碼上市櫃股票。")
