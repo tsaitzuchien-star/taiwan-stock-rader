@@ -169,7 +169,8 @@ with tab1:
     with col_chk1: squeeze_filter = st.checkbox("✅ 啟動【布林帶壓縮】(<15%)", value=False, key="sqz") 
     with col_chk2: ma_filter = st.checkbox("✅ 啟動【月季線糾結】(<3%)", value=True, key="ma")
     with col_chk3: gap_filter = st.checkbox("✅ 啟動【主力跳空開高】(>2%)", value=False, key="gap") 
-    with col_chk4: st.markdown("<div style='color:#8b92a5; font-size: 0.9em; margin-top:10px;'>💡 提示：調整滑桿，下方名單會【瞬間】更新！</div>", unsafe_allow_html=True)
+    with col_chk4: washout_filter = st.checkbox("🚨 鎖定【極端洗盤換手】(振幅>12%)", value=False, key="wash")
+    st.markdown("<div style='color:#8b92a5; font-size: 0.9em; margin-top:10px;'>💡 提示：勾選並調整滑桿，下方名單會【瞬間】套用篩選！</div>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     col_batch, col_btn_run, col_btn_reset = st.columns([2, 1.5, 1.5])
@@ -223,6 +224,7 @@ with tab1:
                 if not df_history.empty and len(df_history) >= 60:
                     latest, yesterday = df_history.iloc[-1], df_history.iloc[-2]
                     close_p, today_vol = latest['Close'], latest['Volume'] / 1000
+                    vol5 = df_history['Volume'].tail(5).mean() / 1000
                     vol20, ma20, ma60 = df_history['Volume'].tail(20).mean() / 1000, df_history['Close'].tail(20).mean(), df_history['Close'].tail(60).mean()
                     std20 = df_history['Close'].tail(20).std()
                     bandwidth = (((ma20 + 2*std20) - (ma20 - 2*std20)) / ma20) * 100 if ma20 > 0 else 999
@@ -230,13 +232,22 @@ with tab1:
                     gap_up_pct = ((latest['Open'] - yesterday['Close']) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
                     is_fake = (latest['High'] - max(latest['Open'], close_p)) > abs(close_p - latest['Open'])
                     
+                    # 日內振幅監控邏輯
+                    amplitude = ((latest['High'] - latest['Low']) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
+                    # 判斷是否為強力洗盤：振幅 >= 12%、量能 >= 5日均量3倍、收盤價 >= 當日均價
+                    is_washout = (amplitude >= 12.0) and (today_vol >= vol5 * 3) and (close_p >= (latest['High'] + latest['Low']) / 2)
+                    
                     data_list.append({
                         '股票代號': stock_id, '股票名稱': names_dict.get(stock_id, "未知"), '現價(元)': close_p, 
                         '今日漲跌(%)': round(((close_p - yesterday['Close'])/yesterday['Close'])*100, 2),
+                        '日內振幅(%)': round(amplitude, 2),
                         '月均量(20日)': round(vol20, 0), '今日成交(張)': round(today_vol, 0),
                         '月量爆發倍數': round(today_vol / vol20, 1) if vol20 > 0 else 0,
                         '跳空缺口(%)': round(gap_up_pct, 2), '布林帶寬(%)': round(bandwidth, 2),
-                        '均線糾結(%)': round(ma_diff, 2), '_is_fake': is_fake
+                        '均線糾結(%)': round(ma_diff, 2), 
+                        '強力洗盤訊號': '🚨 觸發' if is_washout else '-',
+                        '_is_fake': is_fake,
+                        '_is_washout': is_washout
                     })
             except: pass
             progress_bar.progress((i + 1) / len(target_stocks))
@@ -259,12 +270,18 @@ with tab1:
         if squeeze_filter: mask = mask & (df_market['布林帶寬(%)'] <= 15)
         if ma_filter: mask = mask & (df_market['均線糾結(%)'] <= 3)
         if gap_filter: mask = mask & (df_market['跳空缺口(%)'] >= 2.0)
+        if washout_filter: mask = mask & (df_market['_is_washout'] == True)
             
-        demon_stocks = df_market[mask].drop(columns=['_is_fake']).drop_duplicates(subset=['股票代號']).reset_index(drop=True)
+        demon_stocks = df_market[mask].drop(columns=['_is_fake', '_is_washout']).drop_duplicates(subset=['股票代號']).reset_index(drop=True)
         
         if not demon_stocks.empty:
             st.write("---")
-            styled_df = demon_stocks.style.format({'現價(元)': "{:.2f}", '今日漲跌(%)': "{:.2f}%", '月均量(20日)': "{:,.0f}", '今日成交(張)': "{:,.0f}", '月量爆發倍數': "{:.1f}x", '跳空缺口(%)': "{:.2f}%", '布林帶寬(%)': "{:.2f}%", '均線糾結(%)': "{:.2f}%"}).background_gradient(subset=['月量爆發倍數'], cmap='Purples')
+            styled_df = demon_stocks.style.format({
+                '現價(元)': "{:.2f}", '今日漲跌(%)': "{:.2f}%", '日內振幅(%)': "{:.2f}%", 
+                '月均量(20日)': "{:,.0f}", '今日成交(張)': "{:,.0f}", 
+                '月量爆發倍數': "{:.1f}x", '跳空缺口(%)': "{:.2f}%", 
+                '布林帶寬(%)': "{:.2f}%", '均線糾結(%)': "{:.2f}%"
+            }).background_gradient(subset=['月量爆發倍數', '日內振幅(%)'], cmap='Purples')
             st.dataframe(styled_df, use_container_width=True)
             
             st.write("---")
@@ -307,7 +324,13 @@ with tab1:
                             row_heat = get_ptt_shoeshine_index(row['股票名稱'])
                             heat_note = f"PTT熱度: {row_heat} 篇" if row_heat >= 0 else "PTT熱度: 異常"
                             if row_heat > 9: heat_note += " (高危險)"
-                            upload_data.append([current_time, str(row['股票名稱']), str(row['股票代號']), float(row['現價(元)']), float(row['今日漲跌(%)']), int(row['月均量(20日)']), int(row['今日成交(張)']), float(row['月量爆發倍數']), float(row['跳空缺口(%)']), float(row['布林帶寬(%)']), float(row['均線糾結(%)']), heat_note])
+                            upload_data.append([
+                                current_time, str(row['股票名稱']), str(row['股票代號']), 
+                                float(row['現價(元)']), float(row['今日漲跌(%)']), float(row['日內振幅(%)']),
+                                int(row['月均量(20日)']), int(row['今日成交(張)']), float(row['月量爆發倍數']), 
+                                float(row['跳空缺口(%)']), float(row['布林帶寬(%)']), float(row['均線糾結(%)']), 
+                                str(row['強力洗盤訊號']), heat_note
+                            ])
                         sheet.append_rows(upload_data, value_input_option='USER_ENTERED')
                         st.success(f"✅ 成功將情報備份至雲端！")
                         st.balloons()
