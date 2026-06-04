@@ -1,3 +1,7 @@
+# 忽略 Google 雲端金鑰
 google_key.json
+
+# 忽略本機戰情日誌與暫存檔
 scan_log.json
 __pycache__/
+.DS_Store
