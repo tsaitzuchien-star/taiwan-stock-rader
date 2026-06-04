@@ -130,7 +130,7 @@ if pure_stocks:
 # ==========================================
 st.markdown("<h1>⚡ 台股妖股雷達 <span style='color: #FFD700;'>V9.6</span> <span style='font-size: 0.5em; color: #8b92a5;'>(全自動戰術版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
-st.markdown("<h3>🏛️ 瑋婷總監 - 國庫資金防護網</h3>", unsafe_allow_html=True)
+st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
 TOTAL_CAPITAL = 1170000
 MAX_RISK_PCT = 0.05 
