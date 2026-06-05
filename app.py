@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.2 | 企業帝國版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.3 | 總裁客製版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統 (Session State)
@@ -38,17 +38,17 @@ def save_scan_log(log_data):
 
 scan_log = load_scan_log()
 
-# 定義四大戰術參數
+# 🚀 V10.3 更新：將「戰術一」永久覆寫為總裁專屬「潛艦密碼」
 TACTICS = {
     "🛠️ 自訂義模式": None,
-    "🌊 戰術一：深海潛艦 (經典起漲)": {"p": 50.0, "v": 1000, "tv": 500, "pm": 4.0, "sqz": True, "ma": True, "gap": False, "wash": False},
+    "🌊 戰術一：深海潛艦 (經典起漲)": {"p": 100.0, "v": 2000, "tv": 500, "pm": 1.5, "sqz": True, "ma": True, "gap": False, "wash": False},
     "🌋 戰術二：大怒神 (極端洗盤)": {"p": 80.0, "v": 2000, "tv": 1500, "pm": 2.5, "sqz": False, "ma": False, "gap": False, "wash": True},
     "⚡ 戰術三：閃電戰 (跳空突破)": {"p": 50.0, "v": 1000, "tv": 500, "pm": 2.5, "sqz": True, "ma": False, "gap": True, "wash": False},
     "🐂 戰術四：老牛翻身 (穩健推升)": {"p": 100.0, "v": 3000, "tv": 1000, "pm": 2.0, "sqz": False, "ma": True, "gap": False, "wash": False}
 }
 
-# 初始化 UI 狀態
-for key, default in [("p_limit", 50.0), ("v_limit", 2000), ("tv_limit", 1000), ("pm_limit", 1.5),
+# 🚀 V10.3 更新：開機預設拉桿，直接鎖定為總裁專屬「潛艦密碼」
+for key, default in [("p_limit", 100.0), ("v_limit", 2000), ("tv_limit", 500), ("pm_limit", 1.5),
                      ("sqz_chk", True), ("ma_chk", True), ("gap_chk", False), ("wash_chk", False)]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -95,7 +95,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 4. 側邊欄：總裁控制台與系統維護 (V10.2 新增)
+# 4. 側邊欄：總裁控制台與系統維護 
 # ==========================================
 with st.sidebar:
     st.markdown("### 🏢 總裁控制台")
@@ -108,7 +108,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.2:** 新增側邊欄重置系統\n- **V10.1:** AI 全自動面試評分\n- **V9.9:** PTT 情報暗殺機制\n- **V9.8:** 雙重流動性防火牆")
+    st.markdown("- **V10.3:** 預設參數客製化綁定\n- **V10.2:** 側邊欄重置系統\n- **V10.1:** AI 全自動面試評分\n- **V9.9:** PTT 情報暗殺機制\n- **V9.8:** 雙重流動性防火牆")
 
 # ==========================================
 # 5. 戰略底層：政府直連 (上市 + 上櫃)
@@ -150,7 +150,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.2</span> <span style='font-size: 0.5em; color: #8b92a5;'>(企業帝國版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.3</span> <span style='font-size: 0.5em; color: #8b92a5;'>(總裁客製版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -159,7 +159,7 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.2 側邊欄控制台", delta="重置系統上線", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.3 預設參數鎖定", delta="潛艦密碼自動載入", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
