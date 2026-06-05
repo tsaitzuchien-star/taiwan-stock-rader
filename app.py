@@ -11,11 +11,15 @@ import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from bs4 import BeautifulSoup
+import urllib3
+
+# 🛡️ 投資長指令：強制關閉 SSL 不安全連線警告，保持戰情室畫面乾淨
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.4 | 終極防護版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.4.1 | 終極防護版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統 (Session State)
@@ -106,7 +110,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.4:** 同學會輿情交叉防護網\n- **V10.3:** 預設參數客製化綁定\n- **V10.2:** 側邊欄重置系統\n- **V10.1:** AI 全自動面試評分")
+    st.markdown("- **V10.4.1:** SSL 隱形通行證修補\n- **V10.4:** 同學會輿情交叉防護網\n- **V10.3:** 預設參數客製化綁定\n- **V10.1:** AI 全自動面試評分")
 
 # ==========================================
 # 5. 戰略底層：政府直連 (上市 + 上櫃)
@@ -148,7 +152,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.4</span> <span style='font-size: 0.5em; color: #8b92a5;'>(終極防護版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.4.1</span> <span style='font-size: 0.5em; color: #8b92a5;'>(終極防護版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -157,11 +161,11 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.4 雙重測謊上線", delta="同學會輿情掃描防護", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.4.1 SSL 隱形穿透", delta="雙重測謊全面啟動", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. 情報工具箱 (包含 V10.4 同學會防護網)
+# 7. 情報工具箱 (包含 V10.4.1 同學會防護網)
 # ==========================================
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ptt_shoeshine_index(stock_name):
@@ -177,14 +181,16 @@ def get_ptt_shoeshine_index(stock_name):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_cmoney_blind_spot(stock_id):
-    """🚀 V10.4 新增：同學會輿情盲區自動掃描"""
+    """🚀 V10.4.1 修補：突破 SSL 憑證阻擋的同學會測謊系統"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     }
     url = f"https://www.cmoney.tw/forum/stock/{stock_id}"
     try:
-        res = requests.get(url, headers=headers, timeout=5)
+        # 🔑 關鍵突破點：加入 verify=False，強行繞過 SSL 憑證檢查站！
+        res = requests.get(url, headers=headers, timeout=5, verify=False)
+        
         if res.status_code != 200:
             return False, "🟡 同學會情報網連線受阻，AI 將依原演算法評分。"
         
