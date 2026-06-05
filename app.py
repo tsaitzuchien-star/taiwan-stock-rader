@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V9.8 | 全自動戰術版", layout="wide", page_icon="📡")
+st.set_page_config(page_title="台股妖股雷達 V9.9 | 終極暗殺版", layout="wide", page_icon="📡")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統 (Session State)
@@ -47,8 +47,8 @@ TACTICS = {
 }
 
 # 初始化 UI 狀態
-for key, default in [("p_limit", 50.0), ("v_limit", 1000), ("tv_limit", 300), ("pm_limit", 3.0),
-                     ("sqz_chk", False), ("ma_chk", True), ("gap_chk", False), ("wash_chk", False)]:
+for key, default in [("p_limit", 50.0), ("v_limit", 2000), ("tv_limit", 1000), ("pm_limit", 1.5),
+                     ("sqz_chk", True), ("ma_chk", True), ("gap_chk", False), ("wash_chk", False)]:
     if key not in st.session_state:
         st.session_state[key] = default
 
@@ -128,7 +128,7 @@ if pure_stocks:
 # ==========================================
 # 5. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>⚡ 台股妖股雷達 <span style='color: #FFD700;'>V9.8</span> <span style='font-size: 0.5em; color: #8b92a5;'>(全自動戰術版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>⚡ 台股妖股雷達 <span style='color: #FFD700;'>V9.9</span> <span style='font-size: 0.5em; color: #8b92a5;'>(終極暗殺版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -137,7 +137,7 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V9.8 戰術模組上線", delta="雙重流動性裝甲啟動", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V9.9 暗殺模組上線", delta="PTT情報全自動過濾", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
@@ -173,7 +173,6 @@ def add_liquidity_filter(df, volume_col='Volume', threshold=500):
         latest_ma5_vol = 0
         latest_ma20_vol = 0
         
-    # 必須同時滿足 5日均量與 20日均量皆大於等於門檻 (嚴格阻擋偶發爆量殭屍股)
     is_passed = (latest_ma5_vol >= threshold) and (latest_ma20_vol >= threshold)
     return df, is_passed, latest_ma5_vol, latest_ma20_vol
 
@@ -327,7 +326,7 @@ with tab1:
     if "master_df" in st.session_state:
         df_market = st.session_state.master_df
         
-        # 定義格式化函數
+        # 🚀 V9.9 全自動情報暗殺系統 (整合進格式化函數)
         def apply_mask_and_style(df, cfg):
             # 鐵血防線必定開啟：大於季線 且 排除假突破 且 雙重流動性(5日與20日) >= 500
             mask = (df['現價(元)'] <= cfg['p']) & (df['今日成交(張)'] >= cfg['tv']) & \
@@ -341,37 +340,54 @@ with tab1:
             if cfg['wash']: mask = mask & (df['_is_washout'] == True)
             
             res_df = df[mask].drop(columns=['_is_fake', '_is_washout']).drop_duplicates(subset=['股票代號']).reset_index(drop=True)
+            
             if not res_df.empty:
-                return res_df.style.format({
-                    '現價(元)': "{:.2f}", '今日漲跌(%)': "{:.2f}%", '日內振幅(%)': "{:.2f}%", 
-                    '五日均量(張)': "{:,.0f}", '月均量(20日)': "{:,.0f}", '今日成交(張)': "{:,.0f}", 
-                    '月量爆發倍數': "{:.1f}x", '跳空缺口(%)': "{:.2f}%", 
-                    '布林帶寬(%)': "{:.2f}%", '均線糾結(%)': "{:.2f}%", '季線位置': "{:.2f}"
-                }).background_gradient(subset=['月量爆發倍數', '日內振幅(%)'], cmap='Purples')
+                with st.spinner("🕵️‍♂️ 啟動終極情報暗殺：自動探測 PTT 散戶熱度過濾中..."):
+                    ptt_indices = []
+                    for _, row in res_df.iterrows():
+                        idx = get_ptt_shoeshine_index(row['股票名稱'])
+                        ptt_indices.append(idx)
+                        time.sleep(0.5) # 避免 PTT 防爬蟲封鎖
+                        
+                    res_df['PTT熱度'] = ptt_indices
+                    
+                    # ⚔️ 終極防線：無情抹殺大於 2 篇的熱門股
+                    res_df = res_df[(res_df['PTT熱度'] >= 0) & (res_df['PTT熱度'] <= 2)].reset_index(drop=True)
+                    
+                    if res_df.empty:
+                        return None
+                        
+                    return res_df.style.format({
+                        '現價(元)': "{:.2f}", '今日漲跌(%)': "{:.2f}%", '日內振幅(%)': "{:.2f}%", 
+                        '五日均量(張)': "{:,.0f}", '月均量(20日)': "{:,.0f}", '今日成交(張)': "{:,.0f}", 
+                        '月量爆發倍數': "{:.1f}x", '跳空缺口(%)': "{:.2f}%", 
+                        '布林帶寬(%)': "{:.2f}%", '均線糾結(%)': "{:.2f}%", '季線位置': "{:.2f}",
+                        'PTT熱度': "{:.0f} 篇"
+                    }).background_gradient(subset=['月量爆發倍數', '日內振幅(%)'], cmap='Purples')
             return None
 
         # 渲染洗澡模式 (多戰術分頁)
         if st.session_state.get("is_shower_mode", False):
-            st.success("🛁 洗澡模式掃描完畢！以下為全市場套用四大戰術的分類結果：")
+            st.success("🛁 洗澡模式掃描完畢！以下為全市場套用四大戰術的分類結果 (僅顯示 PTT ≦ 2 篇之完美潛艦)：")
             st.write("---")
             t1, t2, t3, t4 = st.tabs(["🌊 戰術一：深海潛艦", "🌋 戰術二：大怒神", "⚡ 戰術三：閃電戰", "🐂 戰術四：老牛翻身"])
             
             with t1:
                 res1 = apply_mask_and_style(df_market, TACTICS["🌊 戰術一：深海潛艦 (經典起漲)"])
                 if res1 is not None: st.dataframe(res1, use_container_width=True)
-                else: st.info("🛡️ 今日無符合【深海潛艦】型態之標的。")
+                else: st.info("🛡️ 今日無符合【深海潛艦】型態且無人討論之標的。")
             with t2:
                 res2 = apply_mask_and_style(df_market, TACTICS["🌋 戰術二：大怒神 (極端洗盤)"])
                 if res2 is not None: st.dataframe(res2, use_container_width=True)
-                else: st.info("🛡️ 今日無符合【大怒神】型態之標的。")
+                else: st.info("🛡️ 今日無符合【大怒神】型態且無人討論之標的。")
             with t3:
                 res3 = apply_mask_and_style(df_market, TACTICS["⚡ 戰術三：閃電戰 (跳空突破)"])
                 if res3 is not None: st.dataframe(res3, use_container_width=True)
-                else: st.info("🛡️ 今日無符合【閃電戰】型態之標的。")
+                else: st.info("🛡️ 今日無符合【閃電戰】型態且無人討論之標的。")
             with t4:
                 res4 = apply_mask_and_style(df_market, TACTICS["🐂 戰術四：老牛翻身 (穩健推升)"])
                 if res4 is not None: st.dataframe(res4, use_container_width=True)
-                else: st.info("🛡️ 今日無符合【老牛翻身】型態之標的。")
+                else: st.info("🛡️ 今日無符合【老牛翻身】型態且無人討論之標的。")
                 
         # 渲染一般模式 (單一設定)
         else:
@@ -384,12 +400,12 @@ with tab1:
                 st.write("---")
                 st.dataframe(res_custom, use_container_width=True)
             else:
-                st.info("🛡️ 無符合設定的股票。 (提示：鐵血防線已啟動，跌破季線或雙重流動性不足 500 張者皆予剔除)")
+                st.info("🛡️ 終極情報暗殺完畢：無符合設定且 PTT 討論低於 2 篇之標的。寧可空手，絕不追高！")
             
         # 情報探測器 (共用於兩種模式)
         st.write("---")
-        st.markdown("<h2>📊 X 光透視與情報探測</h2>", unsafe_allow_html=True)
-        # 把所有選出來的股票整合到下拉選單
+        st.markdown("<h2>📊 X 光透視與情報探測 (完整資料庫選單)</h2>", unsafe_allow_html=True)
+        # 把所有站上季線的股票整合到下拉選單，提供手動查閱
         available_stocks = df_market[df_market['現價(元)'] > df_market['季線位置']] 
         stock_options = [f"{row['股票代號']} - {row['股票名稱']}" for _, row in available_stocks.iterrows()]
         
