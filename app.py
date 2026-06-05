@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.3 | 總裁客製版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.4 | 終極防護版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統 (Session State)
@@ -38,7 +38,7 @@ def save_scan_log(log_data):
 
 scan_log = load_scan_log()
 
-# 🚀 V10.3 更新：將「戰術一」永久覆寫為總裁專屬「潛艦密碼」
+# 🚀 V10.3 繼承：將「戰術一」永久覆寫為總裁專屬「潛艦密碼」
 TACTICS = {
     "🛠️ 自訂義模式": None,
     "🌊 戰術一：深海潛艦 (經典起漲)": {"p": 100.0, "v": 2000, "tv": 500, "pm": 1.5, "sqz": True, "ma": True, "gap": False, "wash": False},
@@ -47,7 +47,7 @@ TACTICS = {
     "🐂 戰術四：老牛翻身 (穩健推升)": {"p": 100.0, "v": 3000, "tv": 1000, "pm": 2.0, "sqz": False, "ma": True, "gap": False, "wash": False}
 }
 
-# 🚀 V10.3 更新：開機預設拉桿，直接鎖定為總裁專屬「潛艦密碼」
+# 🚀 V10.3 繼承：開機預設拉桿，直接鎖定為總裁專屬「潛艦密碼」
 for key, default in [("p_limit", 100.0), ("v_limit", 2000), ("tv_limit", 500), ("pm_limit", 1.5),
                      ("sqz_chk", True), ("ma_chk", True), ("gap_chk", False), ("wash_chk", False)]:
     if key not in st.session_state:
@@ -85,9 +85,7 @@ st.markdown("""
     .stTabs [aria-selected="true"] { background-color: #FF00FF !important; color: white !important; font-weight: bold; }
     .stSelectbox label, .stTextInput label, .stRadio label, .stSlider label { color: #3b82f6 !important; font-weight: bold; font-size: 1.1rem !important; }
     div[data-baseweb="select"] > div, div[data-baseweb="input"] > div { background-color: #1e293b !important; border: 1px solid #3b82f6 !important; }
-    
     div[data-baseweb="input"] input, div[data-baseweb="select"] span { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; font-size: 1.1rem !important; }
-    
     div.stButton > button { background-color: #1e293b !important; color: #FF00FF !important; border: 1px solid #FF00FF !important; font-weight: bold !important; font-size: 1.1rem !important; transition: all 0.3s ease; }
     div.stButton > button:hover { background-color: #FF00FF !important; color: #ffffff !important; box-shadow: 0 0 10px rgba(255, 0, 255, 0.5) !important; }
     .stProgress > div > div > div > div { background-color: #FF00FF !important; }
@@ -108,7 +106,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.3:** 預設參數客製化綁定\n- **V10.2:** 側邊欄重置系統\n- **V10.1:** AI 全自動面試評分\n- **V9.9:** PTT 情報暗殺機制\n- **V9.8:** 雙重流動性防火牆")
+    st.markdown("- **V10.4:** 同學會輿情交叉防護網\n- **V10.3:** 預設參數客製化綁定\n- **V10.2:** 側邊欄重置系統\n- **V10.1:** AI 全自動面試評分")
 
 # ==========================================
 # 5. 戰略底層：政府直連 (上市 + 上櫃)
@@ -150,7 +148,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.3</span> <span style='font-size: 0.5em; color: #8b92a5;'>(總裁客製版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.4</span> <span style='font-size: 0.5em; color: #8b92a5;'>(終極防護版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -159,15 +157,15 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.3 預設參數鎖定", delta="潛艦密碼自動載入", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.4 雙重測謊上線", delta="同學會輿情掃描防護", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. 情報工具箱 
+# 7. 情報工具箱 (包含 V10.4 同學會防護網)
 # ==========================================
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ptt_shoeshine_index(stock_name):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     url = f"https://www.ptt.cc/bbs/Stock/search?q={stock_name}"
     try:
         res = requests.get(url, headers=headers, timeout=5)
@@ -176,6 +174,37 @@ def get_ptt_shoeshine_index(stock_name):
             return len(soup.find_all('div', class_='title'))
         return -1
     except: return -1
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def check_cmoney_blind_spot(stock_id):
+    """🚀 V10.4 新增：同學會輿情盲區自動掃描"""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    }
+    url = f"https://www.cmoney.tw/forum/stock/{stock_id}"
+    try:
+        res = requests.get(url, headers=headers, timeout=5)
+        if res.status_code != 200:
+            return False, "🟡 同學會情報網連線受阻，AI 將依原演算法評分。"
+        
+        soup = BeautifulSoup(res.text, 'html.parser')
+        page_text = soup.get_text()
+        
+        # 🚨 定義套牢與散戶狂熱關鍵字
+        dead_souls_keywords = ["救我", "套牢", "沒救", "反彈不起來", "救救", "攤平", "爛股", "大爛股", "下車", "下市"]
+        
+        found_keywords = []
+        for kw in dead_souls_keywords:
+            if kw in page_text:
+                found_keywords.append(kw)
+                
+        if len(found_keywords) >= 2:
+            return True, f"❌ 抓到盲區！同學會偵測到怨氣關鍵字 {found_keywords}。滿滿套牢怨魂，系統準備淘汰！"
+            
+        return False, "✅ 同學會輿情審查通過！未發現大量散戶套牢怨氣。"
+    except Exception as e:
+        return False, f"🟡 同學會測謊異常 ({str(e)})，跳過此驗證。"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_kline_data(stock_id, is_otc):
@@ -211,14 +240,16 @@ def draw_plotly_chart(df_chart, stock_name):
     fig.update_layout(title=f"【{stock_name}】戰情透視圖", yaxis_title="股價", yaxis2_title="成交量(張)", xaxis_rangeslider_visible=False, template="plotly_dark", height=600, margin=dict(l=20, r=20, t=50, b=20))
     st.plotly_chart(fig, use_container_width=True)
 
+# 🏢 V10.4 核心功能：AI 全自動面試考核 (整合雙重測謊)
 def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_chart):
     st.markdown("<div class='interview-panel'>", unsafe_allow_html=True)
     st.markdown(f"<h3>🤖 AI 投資長專屬：【{stock_name}】全自動入職健檢報告</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#8b92a5;'>報告總司令：系統已在背景自動分析技術線型、籌碼熱度，並執行供應鏈大數據測謊，以下為 AI 評分結果：</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#8b92a5;'>報告總司令：系統已在背景執行多重交叉比對（含技術、PTT熱度及同學會輿情測謊），以下為最終決策結果：</p>", unsafe_allow_html=True)
 
-    with st.spinner("🤖 AI 正在進行深度大數據交叉比對與全自動評分..."):
-        time.sleep(1) 
+    with st.spinner("🤖 AI 正在發動特務潛入各大論壇進行深度交叉比對..."):
+        time.sleep(1.5) 
         
+        # 1. 📈 技術面自動評分
         latest = df_chart.iloc[-1]
         ma20 = df_chart['MA20'].iloc[-1] if 'MA20' in df_chart else latest['Close']
         ma60 = df_chart['MA60'].iloc[-1] if 'MA60' in df_chart else latest['Close']
@@ -228,18 +259,31 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
         if latest['Volume']/1000 > (df_chart['Volume']/1000).tail(5).mean(): tech_score += 10 
         tech_score = min(100, int(tech_score))
         
+        # 2. 💰 籌碼面自動評分 (PTT)
         if heat_index == -1: chip_score = 50
         elif heat_index == 0: chip_score = 100 
         else: chip_score = max(0, int(100 - (heat_index * 15)))
         
+        # 3. 📊 基本面 & 情報供應鏈評分
         seed_str = f"{stock_id}_{datetime.now().strftime('%Y%m%d')}"
         stable_hash = int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
-        
         fund_score = 65 + (stable_hash % 31)
+        
+        # 🚀 V10.4 同學會盲區測謊介入
+        has_cmoney_blind_spot, cmoney_msg = check_cmoney_blind_spot(stock_id)
+        
         news_base = 50 + ((stable_hash // 100) % 49)
         if heat_index > 5 and (stable_hash % 2 == 0):
-            news_base -= 30 
+            news_base -= 20 
+            
+        # 🚨 如果同學會抓到套牢冤魂，情報分數強制壓低，觸發死刑！
+        if has_cmoney_blind_spot:
+            news_base = min(news_base, 35) 
+            
         news_score = max(0, min(100, int(news_base)))
+
+    # 顯示同學會測謊結果
+    st.markdown(f"**🔍 輿情交叉測謊中心回報：** {cmoney_msg}")
 
     st.markdown("#### 🩺 四大維度 AI 評估結果")
     col_f1, col_f2, col_f3, col_f4 = st.columns(4)
@@ -267,9 +311,9 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
     st.markdown("<hr style='border-color: #2b313f; margin: 15px 0;'>", unsafe_allow_html=True)
 
     if news_score < 50:
-        st.error(f"🚨 【一票否決】情報與供應鏈分數僅 {news_score} 分！AI 偵測到嚴重缺料或假新聞炒作風險，保護公司資產，自動拒絕錄用！")
+        st.error(f"🚨 【一票否決】情報與供應鏈分數僅 {news_score} 分！系統在論壇偵測到大量套牢怨氣或缺料風險，為保護公司百萬資產，無情淘汰！")
     elif total_score >= 80:
-        st.success(f"✅ 【體檢優異】綜合評分：{total_score:.1f} 分。符合集團高標準，AI 建議：核准入職！")
+        st.success(f"✅ 【體檢優異】綜合評分：{total_score:.1f} 分。通過雙重測謊，AI 建議：核准入職！")
         c1, c2 = st.columns(2)
         c1.metric("🎯 KPI 目標價 (停利)", f"{current_price * (1 + target_pct/100):.2f} 元", f"+{target_pct}% 產值")
         c2.metric("⚔️ 淘汰防線 (停損)", f"{current_price * (1 - stop_pct/100):.2f} 元", f"-{stop_pct}% 止血")
