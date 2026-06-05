@@ -19,7 +19,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.4.1 | 終極防護版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.4.2 | 極限防護版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統 (Session State)
@@ -42,7 +42,7 @@ def save_scan_log(log_data):
 
 scan_log = load_scan_log()
 
-# 🚀 V10.3 繼承：將「戰術一」永久覆寫為總裁專屬「潛艦密碼」
+# 🚀 戰術參數：將「戰術一」永久覆寫為總裁專屬「潛艦密碼」
 TACTICS = {
     "🛠️ 自訂義模式": None,
     "🌊 戰術一：深海潛艦 (經典起漲)": {"p": 100.0, "v": 2000, "tv": 500, "pm": 1.5, "sqz": True, "ma": True, "gap": False, "wash": False},
@@ -51,7 +51,7 @@ TACTICS = {
     "🐂 戰術四：老牛翻身 (穩健推升)": {"p": 100.0, "v": 3000, "tv": 1000, "pm": 2.0, "sqz": False, "ma": True, "gap": False, "wash": False}
 }
 
-# 🚀 V10.3 繼承：開機預設拉桿，直接鎖定為總裁專屬「潛艦密碼」
+# 🚀 開機預設拉桿：直接鎖定為總裁專屬「潛艦密碼」
 for key, default in [("p_limit", 100.0), ("v_limit", 2000), ("tv_limit", 500), ("pm_limit", 1.5),
                      ("sqz_chk", True), ("ma_chk", True), ("gap_chk", False), ("wash_chk", False)]:
     if key not in st.session_state:
@@ -110,7 +110,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.4.1:** SSL 隱形通行證修補\n- **V10.4:** 同學會輿情交叉防護網\n- **V10.3:** 預設參數客製化綁定\n- **V10.1:** AI 全自動面試評分")
+    st.markdown("- **V10.4.2:** 同學會極限測謊(零容忍)\n- **V10.4.1:** SSL 隱形通行證\n- **V10.4:** 同學會輿情交叉防護網\n- **V10.3:** 預設參數客製化綁定\n- **V10.1:** AI 全自動面試評分")
 
 # ==========================================
 # 5. 戰略底層：政府直連 (上市 + 上櫃)
@@ -152,7 +152,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.4.1</span> <span style='font-size: 0.5em; color: #8b92a5;'>(終極防護版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.4.2</span> <span style='font-size: 0.5em; color: #8b92a5;'>(極限防護版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -161,11 +161,11 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.4.1 SSL 隱形穿透", delta="雙重測謊全面啟動", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.4.2 極限測謊上線", delta="零容忍政策啟動", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. 情報工具箱 (包含 V10.4.1 同學會防護網)
+# 7. 情報工具箱 (包含 V10.4.2 同學會防護網)
 # ==========================================
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ptt_shoeshine_index(stock_name):
@@ -181,14 +181,14 @@ def get_ptt_shoeshine_index(stock_name):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_cmoney_blind_spot(stock_id):
-    """🚀 V10.4.1 修補：突破 SSL 憑證阻擋的同學會測謊系統"""
+    """🚀 V10.4.2 修補：極限敏感化！同學會零容忍測謊系統"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     }
     url = f"https://www.cmoney.tw/forum/stock/{stock_id}"
     try:
-        # 🔑 關鍵突破點：加入 verify=False，強行繞過 SSL 憑證檢查站！
+        # 🔑 繞過 SSL 憑證檢查站
         res = requests.get(url, headers=headers, timeout=5, verify=False)
         
         if res.status_code != 200:
@@ -197,18 +197,22 @@ def check_cmoney_blind_spot(stock_id):
         soup = BeautifulSoup(res.text, 'html.parser')
         page_text = soup.get_text()
         
-        # 🚨 定義套牢與散戶狂熱關鍵字
-        dead_souls_keywords = ["救我", "套牢", "沒救", "反彈不起來", "救救", "攤平", "爛股", "大爛股", "下車", "下市"]
+        # 🚨 V10.4.2 擴充：散戶絕望語錄大集合 (更口語、更寬鬆)
+        dead_souls_keywords = [
+            "救我", "沒救", "有救", "套牢", "被套", "套在", "反彈不起來", 
+            "救救", "攤平", "爛股", "大爛股", "下車", "下市", "韭菜", "慘", "主力出貨"
+        ]
         
         found_keywords = []
         for kw in dead_souls_keywords:
             if kw in page_text:
                 found_keywords.append(kw)
                 
-        if len(found_keywords) >= 2:
-            return True, f"❌ 抓到盲區！同學會偵測到怨氣關鍵字 {found_keywords}。滿滿套牢怨魂，系統準備淘汰！"
+        # ⚔️ V10.4.2 零容忍政策：只要抓到 1 個字，直接判死刑！
+        if len(found_keywords) >= 1:
+            return True, f"❌ 抓到盲區！偵測到怨氣關鍵字 {found_keywords}。寧可錯殺不願套牢，系統淘汰！"
             
-        return False, "✅ 同學會輿情審查通過！未發現大量散戶套牢怨氣。"
+        return False, "✅ 同學會輿情審查通過！(註: 未掃描到明顯套牢怨氣)"
     except Exception as e:
         return False, f"🟡 同學會測謊異常 ({str(e)})，跳過此驗證。"
 
@@ -246,7 +250,7 @@ def draw_plotly_chart(df_chart, stock_name):
     fig.update_layout(title=f"【{stock_name}】戰情透視圖", yaxis_title="股價", yaxis2_title="成交量(張)", xaxis_rangeslider_visible=False, template="plotly_dark", height=600, margin=dict(l=20, r=20, t=50, b=20))
     st.plotly_chart(fig, use_container_width=True)
 
-# 🏢 V10.4 核心功能：AI 全自動面試考核 (整合雙重測謊)
+# 🏢 V10.4.2 核心功能：AI 全自動面試考核 (整合雙重測謊)
 def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_chart):
     st.markdown("<div class='interview-panel'>", unsafe_allow_html=True)
     st.markdown(f"<h3>🤖 AI 投資長專屬：【{stock_name}】全自動入職健檢報告</h3>", unsafe_allow_html=True)
@@ -275,7 +279,7 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
         stable_hash = int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
         fund_score = 65 + (stable_hash % 31)
         
-        # 🚀 V10.4 同學會盲區測謊介入
+        # 🚀 V10.4.2 同學會盲區測謊介入
         has_cmoney_blind_spot, cmoney_msg = check_cmoney_blind_spot(stock_id)
         
         news_base = 50 + ((stable_hash // 100) % 49)
@@ -347,7 +351,7 @@ with tab1:
     st.markdown("<br>", unsafe_allow_html=True)
     col_chk1, col_chk2, col_chk3, col_chk4 = st.columns(4)
     with col_chk1: squeeze_filter = st.checkbox("✅ 啟動【布林帶壓縮】(<15%)", key="sqz_chk") 
-    with col_chk2: ma_filter = st.checkbox("✅ 啟動【月季線糾結】(<3%)", key="ma_chk")
+    with col_chk2: ma_filter = st.checkbox("✅ 啟ٹی【月季線糾結】(<3%)", key="ma_chk")
     with col_chk3: gap_filter = st.checkbox("✅ 啟動【主力跳空開高】(>2%)", key="gap_chk") 
     with col_chk4: washout_filter = st.checkbox("🚨 鎖定【極端洗盤換手】(振幅>12%)", key="wash_chk")
 
