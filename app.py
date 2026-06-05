@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V9.7 | 全自動戰術版", layout="wide", page_icon="📡")
+st.set_page_config(page_title="台股妖股雷達 V9.8 | 全自動戰術版", layout="wide", page_icon="📡")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統 (Session State)
@@ -128,7 +128,7 @@ if pure_stocks:
 # ==========================================
 # 5. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>⚡ 台股妖股雷達 <span style='color: #FFD700;'>V9.7</span> <span style='font-size: 0.5em; color: #8b92a5;'>(全自動戰術版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>⚡ 台股妖股雷達 <span style='color: #FFD700;'>V9.8</span> <span style='font-size: 0.5em; color: #8b92a5;'>(全自動戰術版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -137,11 +137,11 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V9.7 戰術模組上線", delta="流動性防火牆啟動", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V9.8 戰術模組上線", delta="雙重流動性裝甲啟動", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 6. 情報工具箱 (快取函式與流動性濾網)
+# 6. 情報工具箱 (快取函式與雙重流動性濾網)
 # ==========================================
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ptt_shoeshine_index(stock_name):
@@ -161,15 +161,21 @@ def get_kline_data(stock_id, is_otc):
     except: return pd.DataFrame()
 
 def add_liquidity_filter(df, volume_col='Volume', threshold=500):
-    """為個股歷史資料加入 5 日流動性濾網"""
+    """為個股歷史資料加入 5 日與 20 日雙重流動性濾網"""
     df = df.sort_index(ascending=True) 
     df['MA5_Volume'] = (df[volume_col] / 1000).rolling(window=5).mean()
-    if len(df['MA5_Volume'].dropna()) > 0:
+    df['MA20_Volume'] = (df[volume_col] / 1000).rolling(window=20).mean()
+    
+    if len(df['MA5_Volume'].dropna()) > 0 and len(df['MA20_Volume'].dropna()) > 0:
         latest_ma5_vol = df['MA5_Volume'].iloc[-1]
+        latest_ma20_vol = df['MA20_Volume'].iloc[-1]
     else:
         latest_ma5_vol = 0
-    is_passed = latest_ma5_vol >= threshold
-    return df, is_passed, latest_ma5_vol
+        latest_ma20_vol = 0
+        
+    # 必須同時滿足 5日均量與 20日均量皆大於等於門檻 (嚴格阻擋偶發爆量殭屍股)
+    is_passed = (latest_ma5_vol >= threshold) and (latest_ma20_vol >= threshold)
+    return df, is_passed, latest_ma5_vol, latest_ma20_vol
 
 def draw_plotly_chart(df_chart, stock_name):
     df_chart['MA20'], df_chart['MA60'] = df_chart['Close'].rolling(20).mean(), df_chart['Close'].rolling(60).mean()
@@ -203,7 +209,7 @@ with tab1:
     
     col1, col2, col3, col4 = st.columns(4)
     with col1: price_limit = st.slider("💰 銅板股上限 (現價)", 10.0, 150.0, st.session_state.p_limit, step=1.0, key="p_limit")
-    with col2: vol_limit = st.slider("💧 邊緣人指數 (月均量)", 10, 5000, st.session_state.v_limit, step=10, key="v_limit") 
+    with col2: vol_limit = st.slider("💧 邊緣人指數上限 (月均量)", 10, 5000, st.session_state.v_limit, step=10, key="v_limit") 
     with col3: min_today_vol = st.slider("🛡️ 活水底線 (今日成交)", 100, 3000, st.session_state.tv_limit, step=50, key="tv_limit") 
     with col4: power_multiplier = st.slider("🔥 核彈級爆發 (倍數)", 1.5, 15.0, st.session_state.pm_limit, step=0.5, key="pm_limit")
 
@@ -323,11 +329,11 @@ with tab1:
         
         # 定義格式化函數
         def apply_mask_and_style(df, cfg):
-            # 鐵血防線必定開啟：大於季線 且 排除假突破 且 五日均量 >= 500
+            # 鐵血防線必定開啟：大於季線 且 排除假突破 且 雙重流動性(5日與20日) >= 500
             mask = (df['現價(元)'] <= cfg['p']) & (df['今日成交(張)'] >= cfg['tv']) & \
                    (df['月均量(20日)'] <= cfg['v']) & (df['月量爆發倍數'] >= cfg['pm']) & \
                    (df['_is_fake'] == False) & (df['現價(元)'] > df['季線位置']) & \
-                   (df['五日均量(張)'] >= 500)
+                   (df['五日均量(張)'] >= 500) & (df['月均量(20日)'] >= 500)
                    
             if cfg['sqz']: mask = mask & (df['布林帶寬(%)'] <= 15)
             if cfg['ma']: mask = mask & (df['均線糾結(%)'] <= 3)
@@ -378,7 +384,7 @@ with tab1:
                 st.write("---")
                 st.dataframe(res_custom, use_container_width=True)
             else:
-                st.info("🛡️ 無符合設定的股票。 (提示：鐵血防線已啟動，跌破季線或 5 日均量不足 500 張者皆予剔除)")
+                st.info("🛡️ 無符合設定的股票。 (提示：鐵血防線已啟動，跌破季線或雙重流動性不足 500 張者皆予剔除)")
             
         # 情報探測器 (共用於兩種模式)
         st.write("---")
@@ -416,13 +422,13 @@ with tab1:
                     df_chart = get_kline_data(selected_id, is_otc)
                     
                     if not df_chart.empty: 
-                        processed_df, passed_filter, current_ma5 = add_liquidity_filter(df_chart, volume_col='Volume', threshold=500)
+                        processed_df, passed_filter, current_ma5, current_ma20 = add_liquidity_filter(df_chart, volume_col='Volume', threshold=500)
                         
                         if not passed_filter:
-                            st.error(f"⚠️ 流動性警報：近五日均量僅 {current_ma5:.0f} 張，未達 500 張門檻。")
-                            st.info("💡 為避免滑價風險與資金閒置，系統已啟動流動性防火牆，攔截此標的圖表渲染。")
+                            st.error(f"⚠️ 流動性警報：近五日均量 {current_ma5:.0f} 張，月均量 {current_ma20:.0f} 張。未達雙重 500 張門檻。")
+                            st.info("💡 為避免滑價風險與資金閒置，系統已啟動雙重流動性防火牆，攔截此標的圖表渲染。")
                         else:
-                            st.success(f"✅ 流動性審查通過：近五日均量為 {current_ma5:.0f} 張。")
+                            st.success(f"✅ 流動性審查通過：近五日均量 {current_ma5:.0f} 張，月均量 {current_ma20:.0f} 張。")
                             draw_plotly_chart(processed_df, selected_name)
                     else:
                         st.warning("⚠️ 系統提示：無法取得該檔股票的歷史 K 線資料，可能為剛上市櫃或 API 異常。")
@@ -477,13 +483,13 @@ with tab2:
                         else: 
                             st.error(f"⚖️ **🚨 財務總監拒絕授權：** 現價 {current_price:.2f} 元，買一張已超標 ({int(MAX_EXPOSURE):,} 元)！")
                         
-                        processed_df, passed_filter, current_ma5 = add_liquidity_filter(df_chart, volume_col='Volume', threshold=500)
+                        processed_df, passed_filter, current_ma5, current_ma20 = add_liquidity_filter(df_chart, volume_col='Volume', threshold=500)
                         
                         if not passed_filter:
-                            st.error(f"⚠️ 流動性警報：近五日均量僅 {current_ma5:.0f} 張，未達 500 張門檻。")
-                            st.info("💡 為避免滑價風險與資金閒置，系統已啟動流動性防火牆，攔截此標的圖表渲染。")
+                            st.error(f"⚠️ 流動性警報：近五日均量 {current_ma5:.0f} 張，月均量 {current_ma20:.0f} 張。未達雙重 500 張門檻。")
+                            st.info("💡 為避免滑價風險與資金閒置，系統已啟動雙重流動性防火牆，攔截此標的圖表渲染。")
                         else:
-                            st.success(f"✅ 流動性審查通過：近五日均量為 {current_ma5:.0f} 張。")
+                            st.success(f"✅ 流動性審查通過：近五日均量 {current_ma5:.0f} 張，月均量 {current_ma20:.0f} 張。")
                             draw_plotly_chart(processed_df, target_name)
                     else:
                         st.warning("⚠️ 系統提示：無法取得該檔股票的歷史 K 線資料。")
