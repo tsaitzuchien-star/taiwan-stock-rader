@@ -20,7 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.7.1 | 帝國無刪減版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.7.2 | 零股精準風控版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統 (Session State)
@@ -113,7 +113,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.7.1:** 代碼完整無刪減版修復\n- **V10.7:** 股災防禦版(在職員工約談)\n- **V10.6:** 透明審查版 (展示評分與留言)\n- **V10.5.2:** SSR 降維打擊擷取\n- **V10.4.2:** 同學會極限測謊")
+    st.markdown("- **V10.7.2:** 零股精準風控支援\n- **V10.7.1:** 代碼完整無刪減版修復\n- **V10.7:** 股災防禦版(在職員工約談)\n- **V10.6:** 透明審查版 (展示評分與留言)\n- **V10.5.2:** SSR 降維打擊擷取\n- **V10.4.2:** 同學會極限測謊")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -155,7 +155,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.7.1</span> <span style='font-size: 0.5em; color: #8b92a5;'>(帝國無刪減版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.7.2</span> <span style='font-size: 0.5em; color: #8b92a5;'>(零股精準風控版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -164,7 +164,7 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.7.1 功能全數修復", delta="三艙模組同步上線", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.7.2 零股單位解鎖", delta="精準損益壓力測試", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
@@ -304,7 +304,7 @@ def draw_plotly_chart(df_chart, stock_name):
     fig.update_layout(title=f"【{stock_name}】戰情透視圖", yaxis_title="股價", yaxis2_title="成交量(張)", xaxis_rangeslider_visible=False, template="plotly_dark", height=600, margin=dict(l=20, r=20, t=50, b=20))
     st.plotly_chart(fig, use_container_width=True)
 
-# 🏢 V10.6 核心功能恢復：AI 白盒化評估與情報展示 (適用於第一艙與第二艙)
+# 🏢 V10.6 核心功能：AI 白盒化評估與情報展示 (適用於第一艙與第二艙)
 def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_chart):
     st.markdown("<div class='interview-panel'>", unsafe_allow_html=True)
     st.markdown(f"<h3>🤖 AI 投資長專屬：【{stock_name}】全自動入職健檢報告</h3>", unsafe_allow_html=True)
@@ -604,25 +604,20 @@ with tab1:
             return None
 
         if st.session_state.get("is_shower_mode", False):
-            st.success("🛁 洗澡模式掃描完畢！以下為全市場套用四大戰術的分類結果 (僅顯示 PTT ≦ 2 篇之完美潛艦)：")
             st.write("---")
             t1, t2, t3, t4 = st.tabs(["🌊 深海潛艦", "🌋 大怒神", "⚡ 閃電戰", "🐂 老牛翻身"])
             with t1:
                 res1 = apply_mask_and_style(df_market, TACTICS["🌊 戰術一：深海潛艦 (經典起漲)"])
                 if res1 is not None: st.dataframe(res1, use_container_width=True)
-                else: st.info("🛡️ 今日無符合條件之標的。")
             with t2:
                 res2 = apply_mask_and_style(df_market, TACTICS["🌋 戰術二：大怒神 (極端洗盤)"])
                 if res2 is not None: st.dataframe(res2, use_container_width=True)
-                else: st.info("🛡️ 今日無符合條件之標的。")
             with t3:
                 res3 = apply_mask_and_style(df_market, TACTICS["⚡ 戰術三：閃電戰 (跳空突破)"])
                 if res3 is not None: st.dataframe(res3, use_container_width=True)
-                else: st.info("🛡️ 今日無符合條件之標的。")
             with t4:
                 res4 = apply_mask_and_style(df_market, TACTICS["🐂 戰術四：老牛翻身 (穩健推升)"])
                 if res4 is not None: st.dataframe(res4, use_container_width=True)
-                else: st.info("🛡️ 今日無符合條件之標的。")
         else:
             cfg_custom = {
                 'p': price_limit, 'v': vol_limit, 'tv': min_today_vol, 'pm': power_multiplier,
@@ -748,7 +743,7 @@ with tab2:
 
 
 # ==========================================
-# 🚨 第三艙：在職員工緊急約談室 (極端壓力測試)
+# 🚨 第三艙：在職員工緊急約談室 (極端壓力測試 + 零股解鎖)
 # ==========================================
 with tab3:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
@@ -761,7 +756,8 @@ with tab3:
     with col_emp2: 
         emp_cost = st.number_input("💰 聘用薪水 (買進均價):", min_value=1.0, value=50.0, step=0.5, key="emp_cost")
     with col_emp3: 
-        emp_shares = st.number_input("📦 聘用張數:", min_value=1, value=1, step=1, key="emp_shares")
+        # 🚀 V10.7.2 新增：零股與整張通用的「股數」輸入
+        emp_shares = st.number_input("📦 聘用股數 (1張請輸入1000):", min_value=1, value=1000, step=1, help="一張請填 1000，零股請直接填寫持有股數", key="emp_shares")
     with col_emp4:
         st.markdown("<br>", unsafe_allow_html=True)
         interview_btn = st.button("⚖️ 啟動防禦約談", use_container_width=True, key="emp_btn")
@@ -782,15 +778,15 @@ with tab3:
                     ma20 = df_chart['Close'].rolling(20).mean().iloc[-1]
                     ma60 = df_chart['Close'].rolling(60).mean().iloc[-1]
                     
-                    # --- 1. 計算帳面損益 ---
-                    total_cost_val = emp_cost * emp_shares * 1000
-                    current_val = current_price * emp_shares * 1000
+                    # --- 1. 計算帳面損益 (V10.7.2: 卸除 1000 倍數，改以實際股數精準計算) ---
+                    total_cost_val = emp_cost * emp_shares
+                    current_val = current_price * emp_shares
                     unrealized_pl = current_val - total_cost_val
                     roi_pct = (current_price - emp_cost) / emp_cost * 100
                     
                     # --- 2. 模擬跌停壓力測試 (-10%) ---
                     monday_limit_down = current_price * 0.9
-                    limit_down_val = monday_limit_down * emp_shares * 1000
+                    limit_down_val = monday_limit_down * emp_shares
                     monday_unrealized_pl = limit_down_val - total_cost_val
                     
                     # --- 3. 同學會輿情測謊 ---
