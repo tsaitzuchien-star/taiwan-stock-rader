@@ -20,7 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.9 | 帝國全配史詩版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.9.2 | 帝國無瑕疵版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統
@@ -116,7 +116,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.9:** 巔峰退場機制(出國度假)\n- **V10.8.2:** 財報精準校正(稅費引擎)\n- **V10.8:** 逃命波預測引擎\n- **V10.7.3:** 邏輯精準修復\n- **V10.7.2:** 零股風控支援\n- **V10.6:** 透明審查面試面板")
+    st.markdown("- **V10.9.2:** 情報降噪與排他性過濾修復\n- **V10.9.1:** 畫面排版標籤完整歸位\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報精準校正\n- **V10.8:** 逃命波預測引擎\n- **V10.7:** 零股風控與壓力測試")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -162,7 +162,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9</span> <span style='font-size: 0.5em; color: #8b92a5;'>(帝國全配史詩版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.2</span> <span style='font-size: 0.5em; color: #8b92a5;'>(帝國無瑕疵版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -171,7 +171,7 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.9 巔峰退場啟動", delta="無壓縮完整排版還原", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.9.2 情報濾網啟動", delta="精準過濾非目標雜訊", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
@@ -192,6 +192,7 @@ def get_ptt_shoeshine_index(stock_name):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_cmoney_blind_spot(stock_id):
+    """🚀 V10.9.2：降維打擊並加入嚴格的「側邊欄雜訊」與「他檔股票」過濾器"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
@@ -200,6 +201,9 @@ def check_cmoney_blind_spot(stock_id):
     sample_comments = []
     has_blind_spot = False
     msg = ""
+    
+    # 定義側邊欄與UI介面的常見雜訊字眼
+    exclude_ui_junk = ["自選", "成交量", "▼", "▲", "股市爆料", "分享你的看法", "登入", "註冊", "熱門文章", "維持率"]
     
     try:
         res = requests.get(url, headers=headers, timeout=5, verify=False)
@@ -231,13 +235,34 @@ def check_cmoney_blind_spot(stock_id):
                 
                 extracted = extract_strings(json_data)
                 seen = set()
+                target_code = str(stock_id).strip()
+                
                 for text in extracted:
                     clean_text = re.sub(r'<[^>]+>', '', text).strip()
+                    
+                    # 基礎長度與中文判定
                     if 5 <= len(clean_text) <= 150 and re.search(r'[\u4e00-\u9fa5]', clean_text):
-                        if "股市爆料" not in clean_text and "分享你的看法" not in clean_text:
-                            if clean_text not in seen:
-                                seen.add(clean_text)
-                                sample_comments.append(clean_text)
+                        
+                        # 🚨 1. 過濾 UI 雜訊 (側邊欄的報價widget或按鈕)
+                        is_junk = any(junk in clean_text for junk in exclude_ui_junk)
+                        
+                        if not is_junk:
+                            # 🚨 2. 排他性過濾：檢查是否在討論「其他股票」
+                            # 抓取句子中的所有連續4個數字
+                            four_digits = re.findall(r'\b\d{4}\b', clean_text)
+                            is_other_stock = False
+                            for d in four_digits:
+                                # 如果這個4位數字不是我們查詢的股票代號，且開頭像是台股代號(1~9)
+                                if d != target_code and d.startswith(('1', '2', '3', '4', '5', '6', '8', '9')):
+                                    is_other_stock = True
+                                    break
+                            
+                            # 只有在不是UI雜訊，且沒有明顯提到別檔股票代號時，才收入情報
+                            if not is_other_stock:
+                                if clean_text not in seen:
+                                    seen.add(clean_text)
+                                    sample_comments.append(clean_text)
+                                    
                     if len(sample_comments) >= 5:
                         break
             except:
@@ -268,10 +293,10 @@ def check_cmoney_blind_spot(stock_id):
                 
         if len(found_keywords) >= 1:
             has_blind_spot = True
-            msg = f"❌ 抓到盲區！SSR 封包偵測到怨氣關鍵字 {found_keywords}。滿滿套牢怨魂，系統淘汰！"
+            msg = f"❌ 抓到盲區！SSR 封包偵測到怨氣關鍵字 {found_keywords}。有套牢或大戶出貨疑慮！"
         else:
             has_blind_spot = False
-            msg = "✅ 降維測謊通過！(已讀取底層封裝資料，無明顯套牢恐慌跡象)"
+            msg = "✅ 降維測謊通過！(已精準讀取目標討論區，無明顯套牢恐慌跡象)"
             
         return has_blind_spot, msg, sample_comments
     except Exception as e:
@@ -309,13 +334,13 @@ def draw_plotly_chart(df_chart, stock_name):
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.7, 0.3])
     fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name='K線', increasing_line_color='#ef5350', decreasing_line_color='#26a69a'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['MA60'], line=dict(color='#2962FF', width=2), name='季線(生命線)'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['MA20'], line=dict(color='#FF00FF', width=1.5, dash='dot'), name='月線(強勢逃命)'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['MA10'], line=dict(color='#00FF00', width=1, dash='dash'), name='十日線(弱勢逃命)'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['MA20'], line=dict(color='#FF00FF', width=1.5, dash='dot'), name='月線(強勢線)'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['MA10'], line=dict(color='#00FF00', width=1, dash='dash'), name='十日線(弱勢線)'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['Upper'], line=dict(color='#FFD700', width=1, dash='dot'), name='布林上軌'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['Lower'], line=dict(color='#FFD700', width=1, dash='dot'), name='布林下軌'), row=1, col=1)
     colors = ['#ef5350' if row['Close'] >= row['Open'] else '#26a69a' for _, row in df_chart.iterrows()]
     fig.add_trace(go.Bar(x=df_chart.index, y=df_chart['Volume']/1000, marker_color=colors, name='成交量(張)'), row=2, col=1)
-    fig.update_layout(title=f"【{stock_name}】戰情透視圖 (含逃命波輔助線)", yaxis_title="股價", yaxis2_title="成交量(張)", xaxis_rangeslider_visible=False, template="plotly_dark", height=600, margin=dict(l=20, r=20, t=50, b=20))
+    fig.update_layout(title=f"【{stock_name}】戰情透視圖 (含均線系統)", yaxis_title="股價", yaxis2_title="成交量(張)", xaxis_rangeslider_visible=False, template="plotly_dark", height=600, margin=dict(l=20, r=20, t=50, b=20))
     st.plotly_chart(fig, use_container_width=True)
 
 def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_chart):
@@ -435,7 +460,7 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
     st.markdown("<hr style='border-color: #2b313f; margin: 15px 0;'>", unsafe_allow_html=True)
 
     if news_score < 50:
-        st.error(f"🚨 【一票否決】情報與供應鏈分數僅 {news_score} 分！系統在論壇偵測到大量套牢怨氣或情報風險，為保護公司百萬資產，無情淘汰！")
+        st.error(f"🚨 【一票否決】情報與供應鏈分數僅 {news_score} 分！系統在論壇偵測到大量套牢或危險風險，為保護公司資產，無情淘汰！")
     elif total_score >= 80:
         st.success(f"✅ 【體檢優異】綜合評分：{total_score:.1f} 分。通過雙重測謊，AI 建議：核准入職！")
         c1, c2 = st.columns(2)
@@ -446,7 +471,7 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 8. 三艙切換系統 (100% 完整無刪減版)
+# 8. 三艙切換系統 (排版完全還原，無刪減)
 # ==========================================
 tab1, tab2, tab3 = st.tabs(["📡 第一艙：大範圍妖股雷達", "🎯 第二艙：自選股狙擊追蹤", "🚨 第三艙：在職員工緊急約談室"])
 
@@ -495,11 +520,11 @@ with tab1:
         st.session_state.locked_batch = batch_choice
 
     with col_btn_run: 
-        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白
+        st.markdown("<br>", unsafe_allow_html=True)
         run_scan_btn = st.button("🚀 單一部隊掃描", use_container_width=True)
         
     with col_btn_shower: 
-        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白
+        st.markdown("<br>", unsafe_allow_html=True)
         shower_mode_btn = st.button("🛁 洗澡模式 (掛機全掃描分類)", use_container_width=True)
         
     st.markdown("</div>", unsafe_allow_html=True)
@@ -967,7 +992,7 @@ with tab3:
                             <ul style='color: #d1d4dc;'>
                                 <li><b>市場過熱：</b> PTT 討論度達 {heat_index} 篇，散戶正大量湧入。</li>
                                 <li><b>技術超買：</b> 乖離率達 {bias_ratio:.1f}%，隨時面臨大戶倒貨回檔。</li>
-                                <li><b>輿情風向：</b> 系統可能已攔截到獲利了結的關鍵字。</li>
+                                <li><b>輿情風向：</b> 系統已攔截到獲利了結或大戶出貨的疑慮訊號。</li>
                             </ul>
                             <p style='color: #00E676; font-weight: bold;'><b>執行動作：</b> 這是不可能再創高峰的訊號！請勿貪戀最後一段魚尾，強烈建議於下週一開盤立刻獲利了結，把錢放進口袋，讓他帶著榮耀退休出國度假！</p>
                             </div>
