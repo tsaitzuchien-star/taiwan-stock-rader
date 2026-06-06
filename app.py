@@ -627,7 +627,7 @@ with tab3:
     with col_emp3: 
         emp_shares = st.number_input("📦 買進股數", min_value=1, value=100, step=1, help="一張=1000", key="emp_shares_tab3")
     with col_emp4:
-        fee_discount = st.number_input("📉 手續費折數", min_value=0.1, max_value=1.0, value=1.0, step=0.1, help="例如6折=0.6，無折扣=1.0", key="fee_discount")
+        fee_discount = st.number_input("📉 手續費折數", min_value=0.1, max_value=1.0, value=0.5, step=0.1, help="例如6折=0.6，無折扣=1.0", key="fee_discount")
     with col_emp5:
         st.markdown("<br>", unsafe_allow_html=True)
         interview_btn = st.button("⚖️ 啟動防禦約談", use_container_width=True, key="emp_btn_tab3")
