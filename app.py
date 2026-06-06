@@ -116,7 +116,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.9.2:** 情報降噪與排他性過濾修復\n- **V10.9.1:** 畫面排版標籤完整歸位\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報精準校正\n- **V10.8:** 逃命波預測引擎\n- **V10.7:** 零股風控與壓力測試")
+    st.markdown("- **V10.9.2:** 情報濾網修復(完全體不刪減)\n- **V10.9.1:** 排版歸位修正\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報精準校正\n- **V10.8:** 逃命波預測引擎\n- **V10.7.3:** 零股風控與壓力測試")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -240,24 +240,19 @@ def check_cmoney_blind_spot(stock_id):
                 for text in extracted:
                     clean_text = re.sub(r'<[^>]+>', '', text).strip()
                     
-                    # 基礎長度與中文判定
                     if 5 <= len(clean_text) <= 150 and re.search(r'[\u4e00-\u9fa5]', clean_text):
-                        
-                        # 🚨 1. 過濾 UI 雜訊 (側邊欄的報價widget或按鈕)
+                        # 🚨 1. 過濾 UI 雜訊
                         is_junk = any(junk in clean_text for junk in exclude_ui_junk)
                         
                         if not is_junk:
                             # 🚨 2. 排他性過濾：檢查是否在討論「其他股票」
-                            # 抓取句子中的所有連續4個數字
                             four_digits = re.findall(r'\b\d{4}\b', clean_text)
                             is_other_stock = False
                             for d in four_digits:
-                                # 如果這個4位數字不是我們查詢的股票代號，且開頭像是台股代號(1~9)
                                 if d != target_code and d.startswith(('1', '2', '3', '4', '5', '6', '8', '9')):
                                     is_other_stock = True
                                     break
                             
-                            # 只有在不是UI雜訊，且沒有明顯提到別檔股票代號時，才收入情報
                             if not is_other_stock:
                                 if clean_text not in seen:
                                     seen.add(clean_text)
@@ -502,7 +497,7 @@ with tab1:
     with col_chk2:
         ma_filter = st.checkbox("✅ 啟動【月季線糾結】(<3%)", key="ma_chk")
     with col_chk3:
-        gap_filter = st.checkbox("✅ 啟動【主力跳空開高】(>2%)", key="gap_chk") 
+        gap_filter = st.checkbox("✅ 啟 ঈদের跳空開高】(>2%)", key="gap_chk") 
     with col_chk4:
         washout_filter = st.checkbox("🚨 鎖定【極端洗盤換手】(振幅>12%)", key="wash_chk")
 
@@ -520,11 +515,11 @@ with tab1:
         st.session_state.locked_batch = batch_choice
 
     with col_btn_run: 
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白，按鈕對齊
         run_scan_btn = st.button("🚀 單一部隊掃描", use_container_width=True)
         
     with col_btn_shower: 
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白，按鈕對齊
         shower_mode_btn = st.button("🛁 洗澡模式 (掛機全掃描分類)", use_container_width=True)
         
     st.markdown("</div>", unsafe_allow_html=True)
@@ -992,7 +987,7 @@ with tab3:
                             <ul style='color: #d1d4dc;'>
                                 <li><b>市場過熱：</b> PTT 討論度達 {heat_index} 篇，散戶正大量湧入。</li>
                                 <li><b>技術超買：</b> 乖離率達 {bias_ratio:.1f}%，隨時面臨大戶倒貨回檔。</li>
-                                <li><b>輿情風向：</b> 系統已攔截到獲利了結或大戶出貨的疑慮訊號。</li>
+                                <li><b>輿情風向：</b> 系統可能已攔截到獲利了結或大戶出貨的疑慮訊號。</li>
                             </ul>
                             <p style='color: #00E676; font-weight: bold;'><b>執行動作：</b> 這是不可能再創高峰的訊號！請勿貪戀最後一段魚尾，強烈建議於下週一開盤立刻獲利了結，把錢放進口袋，讓他帶著榮耀退休出國度假！</p>
                             </div>
