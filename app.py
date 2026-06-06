@@ -20,7 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.9.3 | 帝國無瑕疵完全體", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.9.4 | 終極無瑕淨化版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統
@@ -116,7 +116,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.9.3:** 帝國無瑕疵完全體(乾淨情報)\n- **V10.9.2:** 情報濾網修復(完全體不刪減)\n- **V10.9.1:** 排版歸位修正\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報精準校正\n- **V10.8:** 逃命波預測引擎\n- **V10.7:** 零股風控與壓力測試")
+    st.markdown("- **V10.9.4:** 終極淨化(排除他檔股票與UI雜訊)\n- **V10.9.2:** 排版與完全體修復\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報精準校正\n- **V10.8:** 逃命波預測引擎\n- **V10.7:** 零股風控與壓力測試")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -162,7 +162,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.3</span> <span style='font-size: 0.5em; color: #8b92a5;'>(帝國無瑕疵完全體)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.4</span> <span style='font-size: 0.5em; color: #8b92a5;'>(終極無瑕淨化版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -171,11 +171,11 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.9.3 情報濾網極致淨化", delta="100% 無刪減完全體", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.9.4 軍用濾網上線", delta="情報絕對乾淨無雜訊", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. 情報工具箱 
+# 7. 情報工具箱 (包含 V10.9.4 情報濾網)
 # ==========================================
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ptt_shoeshine_index(stock_name):
@@ -191,8 +191,8 @@ def get_ptt_shoeshine_index(stock_name):
         return -1
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def check_cmoney_blind_spot(stock_id):
-    """🚀 V10.9.3：降維打擊並加入最嚴格的「側邊欄雜訊」與「他檔股票」過濾器"""
+def check_cmoney_blind_spot(stock_id, target_name):
+    """🚀 V10.9.4：加入軍用級黑名單與UI雜訊剔除機制"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
@@ -202,18 +202,23 @@ def check_cmoney_blind_spot(stock_id):
     has_blind_spot = False
     msg = ""
     
-    # 🚨 最嚴格的側邊欄與UI介面雜訊字眼
-    exclude_ui_junk = ["自選", "成交量", "▼", "▲", "股市爆料", "分享你的看法", "登入", "註冊", "熱門文章", "維持率"]
+    # 🚨 1. 嚴格過濾 UI 與側邊欄雜訊
+    exclude_ui_junk = ["自選", "成交量", "▼", "▲", "股市爆料", "分享你的看法", "登入", "註冊", "熱門文章", "維持率", "粉絲", "追蹤", "發文", "人氣"]
+    
+    # 🚨 2. 嚴格黑名單 (常見於側邊欄排行榜的其他股票)
+    major_stocks = ["台積電", "鴻海", "聯發科", "長榮", "陽明", "萬海", "群創", "友達", "華邦電", "聯電", "緯創", "廣達", "技嘉", "建漢", "台達電", "光寶科", "欣興", "奇鋐", "智原", "大同", "宏碁"]
+    if target_name in major_stocks:
+        major_stocks.remove(target_name)
     
     try:
         res = requests.get(url, headers=headers, timeout=5, verify=False)
-        
         if res.status_code != 200:
             return False, f"🟡 網頁連線受阻 (HTTP {res.status_code})，跳過測謊。", []
         
         soup = BeautifulSoup(res.text, 'html.parser')
         next_data_script = soup.find('script', id='__NEXT_DATA__')
         page_text = ""
+        extracted_strings = []
         
         if next_data_script:
             try:
@@ -233,48 +238,49 @@ def check_cmoney_blind_spot(stock_id):
                             strings.extend(extract_strings(item))
                     return strings
                 
-                extracted = extract_strings(json_data)
-                seen = set()
-                target_code = str(stock_id).strip()
-                
-                for text in extracted:
-                    clean_text = re.sub(r'<[^>]+>', '', text).strip()
-                    
-                    if 5 <= len(clean_text) <= 150 and re.search(r'[\u4e00-\u9fa5]', clean_text):
-                        # 🚨 1. 過濾 UI 雜訊
-                        is_junk = any(junk in clean_text for junk in exclude_ui_junk)
-                        
-                        if not is_junk:
-                            # 🚨 2. 排他性過濾：檢查是否在討論「其他股票」
-                            four_digits = re.findall(r'\b\d{4}\b', clean_text)
-                            is_other_stock = False
-                            for d in four_digits:
-                                if d != target_code and d.startswith(('1', '2', '3', '4', '5', '6', '8', '9')):
-                                    is_other_stock = True
-                                    break
-                            
-                            if not is_other_stock:
-                                if clean_text not in seen:
-                                    seen.add(clean_text)
-                                    sample_comments.append(clean_text)
-                                    
-                    if len(sample_comments) >= 5:
-                        break
+                extracted_strings = extract_strings(json_data)
             except:
                 pass
-            
-        if not page_text:
+                
+        if not extracted_strings:
             page_text = soup.get_text()
-            
-        if not sample_comments:
             raw_text = soup.get_text(separator=' ', strip=True)
-            sentences = re.split(r'[。！？\n]', raw_text)
-            for s in sentences:
-                s = s.strip()
-                if 8 <= len(s) <= 100 and "股市爆料" not in s and re.search(r'[\u4e00-\u9fa5]', s):
-                    sample_comments.append(s)
-                if len(sample_comments) >= 5:
-                    break
+            extracted_strings = re.split(r'[。！？\n]', raw_text)
+            
+        seen = set()
+        target_code = str(stock_id).strip()
+        
+        for text in extracted_strings:
+            clean_text = re.sub(r'<[^>]+>', '', text).strip()
+            
+            if 5 <= len(clean_text) <= 150 and re.search(r'[\u4e00-\u9fa5]', clean_text):
+                # 規則 A: 過濾 UI 雜訊按鈕
+                if any(junk in clean_text for junk in exclude_ui_junk):
+                    continue
+                # 規則 B: 過濾提到排行榜其他股票的句子
+                if any(s in clean_text for s in major_stocks):
+                    continue
+                # 規則 C: 過濾帶有時間戳記的 UI 標籤 (例如: 星期六 17:38)
+                if re.search(r'(星期[一二三四五六日]|\d{1,2}/\d{1,2})\s*\d{1,2}:\d{2}', clean_text):
+                    continue
+                    
+                # 規則 D: 排他性過濾 (如果句子裡有4位數字，但不是我們查的股票，就跳過)
+                four_digits = re.findall(r'\b\d{4}\b', clean_text)
+                is_other = False
+                for d in four_digits:
+                    if d != target_code and d.startswith(('1', '2', '3', '4', '5', '6', '8', '9')):
+                        is_other = True
+                        break
+                if is_other:
+                    continue
+
+                # 通過所有濾網，收錄為純淨情報
+                if clean_text not in seen:
+                    seen.add(clean_text)
+                    sample_comments.append(clean_text)
+                    
+            if len(sample_comments) >= 5:
+                break
             
         dead_souls_keywords = [
             "救我", "沒救", "有救", "套牢", "被套", "套在", "反彈不起來", 
@@ -288,10 +294,10 @@ def check_cmoney_blind_spot(stock_id):
                 
         if len(found_keywords) >= 1:
             has_blind_spot = True
-            msg = f"❌ 抓到盲區！SSR 封包偵測到怨氣關鍵字 {found_keywords}。有套牢或大戶出貨疑慮！"
+            msg = f"❌ 抓到盲區！SSR 封包偵測到關鍵字 {found_keywords}。有套牢或出貨疑慮！"
         else:
             has_blind_spot = False
-            msg = "✅ 降維測謊通過！(已精準讀取目標討論區，無明顯套牢恐慌跡象)"
+            msg = "✅ 降維測謊通過！(已過濾側邊欄雜訊，無明顯套牢恐慌跡象)"
             
         return has_blind_spot, msg, sample_comments
     except Exception as e:
@@ -329,8 +335,8 @@ def draw_plotly_chart(df_chart, stock_name):
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.7, 0.3])
     fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name='K線', increasing_line_color='#ef5350', decreasing_line_color='#26a69a'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['MA60'], line=dict(color='#2962FF', width=2), name='季線(生命線)'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['MA20'], line=dict(color='#FF00FF', width=1.5, dash='dot'), name='月線(強勢線)'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['MA10'], line=dict(color='#00FF00', width=1, dash='dash'), name='十日線(弱勢線)'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['MA20'], line=dict(color='#FF00FF', width=1.5, dash='dot'), name='月線(強勢逃命)'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['MA10'], line=dict(color='#00FF00', width=1, dash='dash'), name='十日線(弱勢逃命)'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['Upper'], line=dict(color='#FFD700', width=1, dash='dot'), name='布林上軌'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['Lower'], line=dict(color='#FFD700', width=1, dash='dot'), name='布林下軌'), row=1, col=1)
     colors = ['#ef5350' if row['Close'] >= row['Open'] else '#26a69a' for _, row in df_chart.iterrows()]
@@ -394,7 +400,8 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
         fund_score = 65 + (stable_hash % 31)
         fund_exp = f"🔹 AI 產業基期常態分佈演算<br>🔹 法人持股籌碼安全度初探<br>✅ 大數據 PR 值：{int(fund_score * 0.85)}"
         
-        has_cmoney_blind_spot, cmoney_msg, sample_comments = check_cmoney_blind_spot(stock_id)
+        # V10.9.4: 傳入 stock_name 供排他過濾
+        has_cmoney_blind_spot, cmoney_msg, sample_comments = check_cmoney_blind_spot(stock_id, stock_name)
         
         news_base = 50 + ((stable_hash // 100) % 49)
         news_exp = f"🔹 系統原始基底情報：{news_base} 分<br>"
@@ -415,11 +422,11 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
     
     if sample_comments:
         with st.expander("👁️ 查看特務竊聽之論壇前線真實情報 (點擊展開交叉比對)"):
-            st.markdown("<p style='color:#8b92a5; font-size:0.9em;'>以下為系統直接從網頁底層 JSON 攔截之最新或熱門留言，供總裁親自過目：</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color:#8b92a5; font-size:0.9em;'>以下為系統直接從網頁底層 JSON 攔截並過濾雜訊後之純淨留言：</p>", unsafe_allow_html=True)
             for idx, cmt in enumerate(sample_comments):
                 st.markdown(f"> 🗣️ 「*{cmt}*」")
     else:
-        st.info("ℹ️ 系統已掃描底層資料，但未發現足夠長度之中文留言可供展示。")
+        st.info("ℹ️ 系統已掃描底層資料，並過濾掉所有側邊欄雜訊，未發現符合條件之中文留言可供展示。")
 
     st.markdown("<br>#### 🩺 四大維度 AI 評分與邏輯解析", unsafe_allow_html=True)
     col_f1, col_f2, col_f3, col_f4 = st.columns(4)
@@ -515,11 +522,11 @@ with tab1:
         st.session_state.locked_batch = batch_choice
 
     with col_btn_run: 
-        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白
+        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白，按鈕對齊
         run_scan_btn = st.button("🚀 單一部隊掃描", use_container_width=True)
         
     with col_btn_shower: 
-        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白
+        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白，按鈕對齊
         shower_mode_btn = st.button("🛁 洗澡模式 (掛機全掃描分類)", use_container_width=True)
         
     st.markdown("</div>", unsafe_allow_html=True)
@@ -824,7 +831,7 @@ with tab2:
             st.error(f"❌ 查無此代號：{target_code}，請確認是否為正規 4 碼上市櫃股票。")
 
 # ------------------------------------------
-# 🚨 第三艙：在職員工緊急約談室 (V10.9.3 巔峰退場+真實稅費+逃命波)
+# 🚨 第三艙：在職員工緊急約談室 (V10.9.4 巔峰退場+真實稅費+逃命波+情報淨化)
 # ------------------------------------------
 with tab3:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
@@ -886,8 +893,8 @@ with tab3:
                     limit_down_net_val = (monday_limit_down * emp_shares) - sim_sell_fee - sim_tax
                     monday_unrealized_pl = limit_down_net_val - total_cost_val
                     
-                    # --- 3. 同學會輿情測謊 ---
-                    has_blind_spot, cmoney_msg, sample_comments = check_cmoney_blind_spot(emp_code)
+                    # --- 3. 同學會輿情測謊 (V10.9.4: 傳入 emp_name 排除他檔雜訊) ---
+                    has_blind_spot, cmoney_msg, sample_comments = check_cmoney_blind_spot(emp_code, emp_name)
                     
                     # 繪製 K 線圖
                     draw_plotly_chart(df_chart, emp_name)
@@ -909,9 +916,11 @@ with tab3:
                     
                     st.markdown(f"**🔍 週末論壇輿情監聽回報：** {cmoney_msg}")
                     if sample_comments:
-                        with st.expander("👁️ 點擊查看散戶週末都在說什麼 (真實留言抽查)"):
+                        with st.expander("👁️ 點擊查看散戶週末都在說什麼 (純淨真實留言)"):
                             for cmt in sample_comments:
                                 st.markdown(f"> 🗣️ 「*{cmt}*」")
+                    else:
+                        st.info("ℹ️ 情報過濾完畢，目標討論區目前無明顯符合條件之恐慌或熱門中文留言。")
                     
                     # 🚀 逃命波預測 (彼得林區)
                     if current_price < ma60:
