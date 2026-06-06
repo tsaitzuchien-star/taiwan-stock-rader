@@ -13,13 +13,13 @@ from plotly.subplots import make_subplots
 from bs4 import BeautifulSoup
 import urllib3
 
-# 🛡️ 投資長指令：強制關閉 SSL 不安全連線警告，保持戰情室畫面乾淨
+# 🛡️ 投資長指令：強制關閉 SSL 不安全連線警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.5.1 | 完美偽裝版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.5.2 | 降維打擊版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統 (Session State)
@@ -42,7 +42,6 @@ def save_scan_log(log_data):
 
 scan_log = load_scan_log()
 
-# 🚀 戰術參數：將「戰術一」永久覆寫為總裁專屬「潛艦密碼」
 TACTICS = {
     "🛠️ 自訂義模式": None,
     "🌊 戰術一：深海潛艦 (經典起漲)": {"p": 100.0, "v": 2000, "tv": 500, "pm": 1.5, "sqz": True, "ma": True, "gap": False, "wash": False},
@@ -51,7 +50,6 @@ TACTICS = {
     "🐂 戰術四：老牛翻身 (穩健推升)": {"p": 100.0, "v": 3000, "tv": 1000, "pm": 2.0, "sqz": False, "ma": True, "gap": False, "wash": False}
 }
 
-# 🚀 開機預設拉桿：直接鎖定為總裁專屬「潛艦密碼」
 for key, default in [("p_limit", 100.0), ("v_limit", 2000), ("tv_limit", 500), ("pm_limit", 1.5),
                      ("sqz_chk", True), ("ma_chk", True), ("gap_chk", False), ("wash_chk", False)]:
     if key not in st.session_state:
@@ -71,7 +69,7 @@ def apply_tactic():
         st.session_state.wash_chk = cfg["wash"]
 
 # ==========================================
-# 3. 企業級視覺 CSS (含白字修正)
+# 3. 企業級視覺 CSS
 # ==========================================
 st.markdown("""
     <style>
@@ -97,11 +95,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 4. 側邊欄：總裁控制台與系統維護 
+# 4. 側邊欄：總裁控制台
 # ==========================================
 with st.sidebar:
     st.markdown("### 🏢 總裁控制台")
-    st.markdown("<p style='color:#8b92a5; font-size:0.9em;'>若情報網卡住或出現連線異常，請點擊下方按鈕強制重啟情報探測器，清除不良記憶。</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#8b92a5; font-size:0.9em;'>若情報網卡住，請點擊下方按鈕強制重啟。</p>", unsafe_allow_html=True)
     if st.button("🔄 重啟情報網 (清除快取)", use_container_width=True):
         st.cache_data.clear()
         st.success("✅ 快取已清除，情報網重置成功！")
@@ -110,10 +108,10 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.5.1:** API 全套偽裝裝甲\n- **V10.5:** API 直連核彈版(含 VIP Token)\n- **V10.4.2:** 同學會極限測謊(零容忍)\n- **V10.4.1:** SSL 隱形通行證\n- **V10.3:** 預設參數客製化綁定")
+    st.markdown("- **V10.5.2:** SSR 降維打擊擷取 (繞過API)\n- **V10.5.1:** API 全套偽裝裝甲\n- **V10.5:** API 直連核彈版\n- **V10.4.2:** 同學會極限測謊(零容忍)\n- **V10.3:** 預設參數綁定")
 
 # ==========================================
-# 5. 戰略底層：政府直連 (上市 + 上櫃)
+# 5. 戰略底層：政府直連
 # ==========================================
 @st.cache_data(ttl=43200, show_spinner=False)
 def get_real_time_stock_list():
@@ -152,7 +150,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.5.1</span> <span style='font-size: 0.5em; color: #8b92a5;'>(完美偽裝版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.5.2</span> <span style='font-size: 0.5em; color: #8b92a5;'>(降維打擊版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -161,11 +159,11 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.5.1 API 偽裝上線", delta="無聲潛入敵方金庫", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.5.2 SSR 擷取上線", delta="無須Token 永動偵測", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. 情報工具箱 (包含 V10.5.1 API 完美偽裝防護網)
+# 7. 情報工具箱 (包含 V10.5.2 降維打擊防護網)
 # ==========================================
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ptt_shoeshine_index(stock_name):
@@ -181,37 +179,38 @@ def get_ptt_shoeshine_index(stock_name):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_cmoney_blind_spot(stock_id):
-    """🚀 V10.5.1 完美偽裝版：補齊全套 Headers，徹底騙過 Kong 防火牆"""
+    """🚀 V10.5.2 降維打擊版：擷取網頁隱藏 SSR 資料庫，無須 API 金鑰！"""
     
-    # 🔑 總司令截獲的 VIP Token
-    vip_token = "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IkEydWczbUIxRFQiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiIyODU0NDYyMyIsInVzZXJfZ3VpZCI6Ijk2ZmRjMDljLTgwY2EtNGMxMC05Y2FjLTY5MzlmMTQxMTgwYyIsInRva2VuX2lkIjoiMiIsImFwcF9pZCI6IjIxIiwiaXNfZ3Vlc3QiOmZhbHNlLCJuYmYiOjE3ODA2NjYwNzAsImV4cCI6MTc4MDc1NjA3MCwiaWF0IjoxNzgwNjY5NjcwLCJpc3MiOiJodHRwczovL3d3dy5jbW9uZXkudHciLCJhdWQiOiJjbW9uZXlhcGkifQ.V7eWWVOjdJa3Rs3w4xoq6VOK96ClUerzHE2kyyqmT9y4wFpMaAIcI_DFktPKE-OaKOaAO58Gydmfiq8EOak3k3PFJXnpmNC2yEuhXADTJqezYNTpsMw4E_jkh3_ALkJIQW9Be11RvsI8t0cxv-8Kzg4iOw0REinc24AtSn6N0zAqwYUWy5SdTx2tuaVzKcr0vzo2ko1-CpVH36-SjNIPwcyYe_rjZgZPrgP2j8FJ2h4ESi1QDq1ppXdWXTvj2Pq-HD7ekkTvTwoYEq2igCmIC19G9SIG3rDLcUU7MCRqFki01urM0aAlgsYjXwGzVhFLBg2a_7ip6z0UK6WYIaT4GQ"
-    
-    # 🛡️ 極限偽裝：把所有真實瀏覽器會發送的身分證都帶上
+    # 偽裝成一般網友在看網頁，不需要任何 Token
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Origin': 'https://www.cmoney.tw',
-        'Referer': f'https://www.cmoney.tw/forum/stock/{stock_id}', # 騙伺服器我們是從該檔股票頁面進來的
-        'Authorization': vip_token
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     
-    url = f"https://www.cmoney.tw/api/mach/api/Article/Stocks/{stock_id}/AllLatest?limit=10"
+    # 🎯 直擊公開網頁，而非 API
+    url = f"https://www.cmoney.tw/forum/stock/{str(stock_id).strip()}"
     
     try:
-        # 強行繞過 SSL 憑證，並直連 API 獲取純淨資料
         res = requests.get(url, headers=headers, timeout=5, verify=False)
         
-        # 🚨 加入錯誤碼偵測，方便總裁掌控戰況
-        if res.status_code == 401 or res.status_code == 403:
-            return False, f"🟡 授權遭拒 (HTTP {res.status_code})：Token 可能已過期或被鎖定。"
-            
         if res.status_code != 200:
-            return False, f"🟡 API 連線受阻 (HTTP {res.status_code})：防火牆擋下了這次探測。"
+            return False, f"🟡 網頁連線受阻 (HTTP {res.status_code})，跳過測謊。"
         
-        import json
-        page_text = json.dumps(res.json(), ensure_ascii=False)
+        soup = BeautifulSoup(res.text, 'html.parser')
         
+        # 🔑 核心殺招：尋找 Next.js 塞在網頁底部的隱藏資料庫
+        next_data_script = soup.find('script', id='__NEXT_DATA__')
+        page_text = ""
+        
+        if next_data_script:
+            try:
+                # 成功找到隱藏資料庫，將它轉成文字
+                json_data = json.loads(next_data_script.string)
+                page_text = json.dumps(json_data, ensure_ascii=False)
+            except:
+                page_text = soup.get_text() # 如果解析失敗，退回傳統文字抓取
+        else:
+            page_text = soup.get_text() # 如果找不到，退回傳統文字抓取
+            
         # 🚨 V10.4.2 零容忍散戶絕望語錄
         dead_souls_keywords = [
             "救我", "沒救", "有救", "套牢", "被套", "套在", "反彈不起來", 
@@ -225,11 +224,11 @@ def check_cmoney_blind_spot(stock_id):
                 
         # ⚔️ 只要抓到 1 個字，直接判死刑！
         if len(found_keywords) >= 1:
-            return True, f"❌ 抓到盲區！API 深入偵測到怨氣關鍵字 {found_keywords}。滿滿套牢怨魂，系統淘汰！"
+            return True, f"❌ 抓到盲區！SSR 封包偵測到怨氣關鍵字 {found_keywords}。滿滿套牢怨魂，系統淘汰！"
             
-        return False, "✅ 隱藏 API 測謊通過！(已深層掃描最新留言，無套牢跡象)"
+        return False, "✅ 降維測謊通過！(已讀取底層封裝資料，無套牢跡象)"
     except Exception as e:
-        return False, f"🟡 API 測謊異常 ({str(e)})，跳過此驗證。"
+        return False, f"🟡 測謊異常 ({str(e)})，跳過此驗證。"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_kline_data(stock_id, is_otc):
@@ -265,11 +264,11 @@ def draw_plotly_chart(df_chart, stock_name):
     fig.update_layout(title=f"【{stock_name}】戰情透視圖", yaxis_title="股價", yaxis2_title="成交量(張)", xaxis_rangeslider_visible=False, template="plotly_dark", height=600, margin=dict(l=20, r=20, t=50, b=20))
     st.plotly_chart(fig, use_container_width=True)
 
-# 🏢 V10.5.1 核心功能：AI 全自動面試考核 (整合 API 測謊)
+# 🏢 V10.5.2 核心功能：AI 全自動面試考核
 def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_chart):
     st.markdown("<div class='interview-panel'>", unsafe_allow_html=True)
     st.markdown(f"<h3>🤖 AI 投資長專屬：【{stock_name}】全自動入職健檢報告</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#8b92a5;'>報告總司令：系統已在背景執行多重交叉比對（含技術、PTT熱度及同學會 API 深度測謊），以下為最終決策結果：</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#8b92a5;'>報告總司令：系統已在背景執行多重交叉比對（含技術、PTT熱度及同學會 SSR 降維測謊），以下為最終決策結果：</p>", unsafe_allow_html=True)
 
     with st.spinner("🤖 AI 正在發動特務潛入各大論壇進行深度交叉比對..."):
         time.sleep(1.5) 
@@ -294,20 +293,20 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
         stable_hash = int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
         fund_score = 65 + (stable_hash % 31)
         
-        # 🚀 V10.5.1 API 盲區測謊介入
+        # 🚀 V10.5.2 降維盲區測謊介入
         has_cmoney_blind_spot, cmoney_msg = check_cmoney_blind_spot(stock_id)
         
         news_base = 50 + ((stable_hash // 100) % 49)
         if heat_index > 5 and (stable_hash % 2 == 0):
             news_base -= 20 
             
-        # 🚨 如果 API 抓到套牢冤魂，情報分數強制壓低，觸發死刑！
+        # 🚨 如果抓到套牢冤魂，情報分數強制壓低，觸發死刑！
         if has_cmoney_blind_spot:
             news_base = min(news_base, 35) 
             
         news_score = max(0, min(100, int(news_base)))
 
-    # 顯示 API 測謊結果
+    # 顯示測謊結果
     st.markdown(f"**🔍 輿情交叉測謊中心回報：** {cmoney_msg}")
 
     st.markdown("#### 🩺 四大維度 AI 評估結果")
