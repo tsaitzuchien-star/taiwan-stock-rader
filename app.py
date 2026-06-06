@@ -20,7 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.7.2 | 零股精準風控版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.7.3 | 完整最終版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統 (Session State)
@@ -113,7 +113,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.7.2:** 零股精準風控支援\n- **V10.7.1:** 代碼完整無刪減版修復\n- **V10.7:** 股災防禦版(在職員工約談)\n- **V10.6:** 透明審查版 (展示評分與留言)\n- **V10.5.2:** SSR 降維打擊擷取\n- **V10.4.2:** 同學會極限測謊")
+    st.markdown("- **V10.7.3:** 員工套牢/獲利決策邏輯精準修復\n- **V10.7.2:** 零股精準風控支援\n- **V10.7.1:** 代碼完整無刪減版修復\n- **V10.7:** 股災防禦版(在職員工約談)\n- **V10.6:** 透明審查版 (展示評分與留言)")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -155,7 +155,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.7.2</span> <span style='font-size: 0.5em; color: #8b92a5;'>(零股精準風控版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.7.3</span> <span style='font-size: 0.5em; color: #8b92a5;'>(完整最終版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -164,7 +164,7 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.7.2 零股單位解鎖", delta="精準損益壓力測試", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.7.3 邏輯修復完畢", delta="套牢/保本精準判定", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
@@ -579,7 +579,7 @@ with tab1:
             
             res_df = df[mask].drop(columns=['_is_fake', '_is_washout']).drop_duplicates(subset=['股票代號']).reset_index(drop=True)
             
-            # 🚨 核心功能修復：恢復第一艙 PTT 情報暗殺網迴圈
+            # 第一艙 PTT 情報暗殺網
             if not res_df.empty:
                 with st.spinner("🕵️‍♂️ 啟動終極情報暗殺：自動探測 PTT 散戶熱度過濾中..."):
                     ptt_indices = []
@@ -630,7 +630,7 @@ with tab1:
             else:
                 st.info("🛡️ 終極情報暗殺完畢：無符合設定且 PTT 討論低於 2 篇之標的。寧可空手，絕不追高！")
 
-        # 🚨 核心功能修復：恢復 X 光透視選項
+        # X 光透視選項
         st.write("---")
         st.markdown("<h2>📊 X 光透視與情報探測 (完整資料庫選單)</h2>", unsafe_allow_html=True)
         available_stocks = df_market[df_market['現價(元)'] > df_market['季線位置']] 
@@ -680,7 +680,7 @@ with tab1:
                 st.error(f"⚠️ 解析該檔標的時發生系統異常：{str(e)}")
 
 # ==========================================
-# 🚨 核心功能修復：第二艙 (自選股狙擊) 完全恢復
+# 第二艙 (自選股狙擊)
 # ==========================================
 with tab2:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
@@ -743,7 +743,7 @@ with tab2:
 
 
 # ==========================================
-# 🚨 第三艙：在職員工緊急約談室 (極端壓力測試 + 零股解鎖)
+# 🚨 第三艙：在職員工緊急約談室 (極端壓力測試 + 零股解鎖 + 邏輯修復)
 # ==========================================
 with tab3:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
@@ -754,9 +754,8 @@ with tab3:
     with col_emp1: 
         emp_code = st.text_input("📝 員工代號 (目前持股):", placeholder="例如: 2483", key="emp_code")
     with col_emp2: 
-        emp_cost = st.number_input("💰 聘用薪水 (買進均價):", min_value=1.0, value=50.0, step=0.5, key="emp_cost")
+        emp_cost = st.number_input("💰 聘用薪水 (買進均價):", min_value=0.1, value=50.0, step=0.5, key="emp_cost")
     with col_emp3: 
-        # 🚀 V10.7.2 新增：零股與整張通用的「股數」輸入
         emp_shares = st.number_input("📦 聘用股數 (1張請輸入1000):", min_value=1, value=1000, step=1, help="一張請填 1000，零股請直接填寫持有股數", key="emp_shares")
     with col_emp4:
         st.markdown("<br>", unsafe_allow_html=True)
@@ -778,7 +777,7 @@ with tab3:
                     ma20 = df_chart['Close'].rolling(20).mean().iloc[-1]
                     ma60 = df_chart['Close'].rolling(60).mean().iloc[-1]
                     
-                    # --- 1. 計算帳面損益 (V10.7.2: 卸除 1000 倍數，改以實際股數精準計算) ---
+                    # --- 1. 計算帳面損益 (實際股數精準計算) ---
                     total_cost_val = emp_cost * emp_shares
                     current_val = current_price * emp_shares
                     unrealized_pl = current_val - total_cost_val
@@ -819,35 +818,44 @@ with tab3:
                             for cmt in sample_comments:
                                 st.markdown(f"> 🗣️ 「*{cmt}*」")
                     
-                    # 🤖 AI 總裁最終裁決
+                    # 🤖 AI 總裁最終裁決邏輯 (V10.7.3 修復版)
                     st.markdown("#### ⚖️ AI 投資長最終裁決建議")
                     
-                    if (current_price < ma60) or (has_blind_spot and roi_pct < 0):
-                        st.markdown("""
-                        <div class='fire-alert'>
-                        <h3 style='color: #ff4b4b; margin-top: 0;'>🚨 裁決：立刻停損殺出，無情開除！</h3>
-                        <p><b>分析報告：</b> 該員工（股票）現價已跌破生命線（季線），且論壇上已出現散戶套牢哀號。大盤恐慌極易引發流動性危機。</p>
-                        <p><b>執行動作：</b> 資金極度寶貴！只要有反彈或打開跌停，立刻市價砍出斷尾求生，保留現金應對接下來的撿屍期！</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                    elif monday_limit_down < emp_cost or monday_limit_down < ma20:
-                        st.markdown(f"""
-                        <div class='probation-alert'>
-                        <h3 style='color: #FFD700; margin-top: 0;'>⚠️ 裁決：留校察看，嚴格執行防守線！</h3>
-                        <p><b>分析報告：</b> 員工目前獲利微薄。若遭逢跌停，將直接跌破您的成本（{emp_cost} 元）或跌破月線防線（{ma20:.2f} 元）。</p>
-                        <p><b>執行動作：</b> 請設定智慧觸價單。若跌破成本價 {emp_cost} 元，立刻停利/停損退場，絕不讓原本賺錢的部位變拖油瓶。</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                    else:
-                        st.markdown("""
-                        <div class='hold-alert'>
-                        <h3 style='color: #26a69a; margin-top: 0;'>✅ 裁決：防禦深厚，無需恐慌，持續聘用！</h3>
-                        <p><b>分析報告：</b> 該員工表現優異！您聘用的成本夠低，創造了極大緩衝墊。就算跌停也遠高於成本與季線，且無散戶恐慌踩踏跡象。</p>
-                        <p><b>執行動作：</b> 關掉看盤軟體，不要被恐慌洗出場。好員工難尋，我們抱緊處理！</p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    if roi_pct < 0: # 🚨 狀況一：目前已經處於「虧損套牢」狀態
+                        if current_price < ma60 or has_blind_spot:
+                            st.markdown("""
+                            <div class='fire-alert'>
+                            <h3 style='color: #ff4b4b; margin-top: 0;'>🚨 裁決：破線且套牢，立刻停損殺出！</h3>
+                            <p><b>分析報告：</b> 該部位目前已嚴重虧損，且現價跌破生命線（季線），或論壇充滿恐慌。繼續抱著將面臨無底洞風險。</p>
+                            <p><b>執行動作：</b> 斷尾求生！請於週一開盤尋找反彈點市價砍出，保留現金。</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""
+                            <div class='probation-alert'>
+                            <h3 style='color: #FFD700; margin-top: 0;'>⚠️ 裁決：深度套牢，但季線有守，被動防禦！</h3>
+                            <p><b>分析報告：</b> 帳面目前嚴重虧損達 {roi_pct:.2f}%，但幸運的是股價尚未跌破長線防禦（季線 {ma60:.2f} 元）。</p>
+                            <p><b>執行動作：</b> 現在殺出等於砍在阿呆谷。請設定最後防守線為季線 {ma60:.2f} 元，若收盤真跌破季線，再忍痛停損；若守住則等待反彈解套。</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                    else: # 📈 狀況二：目前帳面是「賺錢」狀態
+                        if monday_limit_down < emp_cost or monday_limit_down < ma20:
+                            st.markdown(f"""
+                            <div class='probation-alert'>
+                            <h3 style='color: #FFD700; margin-top: 0;'>⚠️ 裁決：獲利微薄，嚴格保本！</h3>
+                            <p><b>分析報告：</b> 帳面雖然有賺，但若遭逢跌停，將直接跌破您的成本（{emp_cost} 元）。</p>
+                            <p><b>執行動作：</b> 設定智慧觸價單。若跌破成本價 {emp_cost} 元，立刻停利保本退場，絕不讓賺錢部位變拖油瓶。</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown("""
+                            <div class='hold-alert'>
+                            <h3 style='color: #26a69a; margin-top: 0;'>✅ 裁決：防禦深厚，持續聘用！</h3>
+                            <p><b>分析報告：</b> 成本夠低，就算跌停也遠高於成本與季線。</p>
+                            <p><b>執行動作：</b> 關掉看盤軟體，抱緊處理！</p>
+                            </div>
+                            """, unsafe_allow_html=True)
                         
                 else:
                     st.warning("⚠️ 無法取得 K 線資料，請確認代號是否正確。")
