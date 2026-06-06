@@ -20,7 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.9.2 | 帝國無瑕疵版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.9.3 | 帝國無瑕疵完全體", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統
@@ -116,7 +116,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.9.2:** 情報濾網修復(完全體不刪減)\n- **V10.9.1:** 排版歸位修正\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報精準校正\n- **V10.8:** 逃命波預測引擎\n- **V10.7.3:** 零股風控與壓力測試")
+    st.markdown("- **V10.9.3:** 帝國無瑕疵完全體(乾淨情報)\n- **V10.9.2:** 情報濾網修復(完全體不刪減)\n- **V10.9.1:** 排版歸位修正\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報精準校正\n- **V10.8:** 逃命波預測引擎\n- **V10.7:** 零股風控與壓力測試")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -162,7 +162,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.2</span> <span style='font-size: 0.5em; color: #8b92a5;'>(帝國無瑕疵版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.3</span> <span style='font-size: 0.5em; color: #8b92a5;'>(帝國無瑕疵完全體)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -171,7 +171,7 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.9.2 情報濾網啟動", delta="精準過濾非目標雜訊", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.9.3 情報濾網極致淨化", delta="100% 無刪減完全體", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
@@ -192,7 +192,7 @@ def get_ptt_shoeshine_index(stock_name):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_cmoney_blind_spot(stock_id):
-    """🚀 V10.9.2：降維打擊並加入嚴格的「側邊欄雜訊」與「他檔股票」過濾器"""
+    """🚀 V10.9.3：降維打擊並加入最嚴格的「側邊欄雜訊」與「他檔股票」過濾器"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
@@ -202,7 +202,7 @@ def check_cmoney_blind_spot(stock_id):
     has_blind_spot = False
     msg = ""
     
-    # 定義側邊欄與UI介面的常見雜訊字眼
+    # 🚨 最嚴格的側邊欄與UI介面雜訊字眼
     exclude_ui_junk = ["自選", "成交量", "▼", "▲", "股市爆料", "分享你的看法", "登入", "註冊", "熱門文章", "維持率"]
     
     try:
@@ -497,7 +497,7 @@ with tab1:
     with col_chk2:
         ma_filter = st.checkbox("✅ 啟動【月季線糾結】(<3%)", key="ma_chk")
     with col_chk3:
-        gap_filter = st.checkbox("✅ 啟 ঈদের跳空開高】(>2%)", key="gap_chk") 
+        gap_filter = st.checkbox("✅ 啟動【主力跳空開高】(>2%)", key="gap_chk") 
     with col_chk4:
         washout_filter = st.checkbox("🚨 鎖定【極端洗盤換手】(振幅>12%)", key="wash_chk")
 
@@ -515,11 +515,11 @@ with tab1:
         st.session_state.locked_batch = batch_choice
 
     with col_btn_run: 
-        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白，按鈕對齊
+        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白
         run_scan_btn = st.button("🚀 單一部隊掃描", use_container_width=True)
         
     with col_btn_shower: 
-        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白，按鈕對齊
+        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白
         shower_mode_btn = st.button("🛁 洗澡模式 (掛機全掃描分類)", use_container_width=True)
         
     st.markdown("</div>", unsafe_allow_html=True)
@@ -824,7 +824,7 @@ with tab2:
             st.error(f"❌ 查無此代號：{target_code}，請確認是否為正規 4 碼上市櫃股票。")
 
 # ------------------------------------------
-# 🚨 第三艙：在職員工緊急約談室 (V10.9 巔峰退場+真實稅費+逃命波)
+# 🚨 第三艙：在職員工緊急約談室 (V10.9.3 巔峰退場+真實稅費+逃命波)
 # ------------------------------------------
 with tab3:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
@@ -976,7 +976,6 @@ with tab3:
                             
                     else: 
                         # 🚀 V10.9 核心功能：巔峰退場與出國度假機制
-                        # 判斷條件：熱度過高(>9篇) 或 乖離率過大(>20%) 或 輿情亮紅燈
                         is_overheated = (heat_index >= 9) or (bias_ratio >= 20.0) or has_blind_spot
                         
                         if is_overheated:
@@ -987,7 +986,7 @@ with tab3:
                             <ul style='color: #d1d4dc;'>
                                 <li><b>市場過熱：</b> PTT 討論度達 {heat_index} 篇，散戶正大量湧入。</li>
                                 <li><b>技術超買：</b> 乖離率達 {bias_ratio:.1f}%，隨時面臨大戶倒貨回檔。</li>
-                                <li><b>輿情風向：</b> 系統可能已攔截到獲利了結或大戶出貨的疑慮訊號。</li>
+                                <li><b>輿情風向：</b> 系統已攔截到獲利了結或大戶出貨的疑慮訊號。</li>
                             </ul>
                             <p style='color: #00E676; font-weight: bold;'><b>執行動作：</b> 這是不可能再創高峰的訊號！請勿貪戀最後一段魚尾，強烈建議於下週一開盤立刻獲利了結，把錢放進口袋，讓他帶著榮耀退休出國度假！</p>
                             </div>
