@@ -20,7 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.9.4 | 帝國無瑕疵完全體", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.9.5 | 帝國無瑕疵潛艦版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統
@@ -46,14 +46,14 @@ scan_log = load_scan_log()
 
 TACTICS = {
     "🛠️ 自訂義模式": None,
-    "🌊 戰術一：深海潛艦 (經典起漲)": {"p": 100.0, "v": 2000, "tv": 500, "pm": 1.5, "sqz": True, "ma": True, "gap": False, "wash": False},
+    "🌊 戰術一：深海潛艦 (經典起漲)": {"p": 120.0, "v": 3000, "tv": 500, "pm": 1.2, "sqz": False, "ma": False, "gap": False, "wash": True},
     "🌋 戰術二：大怒神 (極端洗盤)": {"p": 80.0, "v": 2000, "tv": 1500, "pm": 2.5, "sqz": False, "ma": False, "gap": False, "wash": True},
     "⚡ 戰術三：閃電戰 (跳空突破)": {"p": 50.0, "v": 1000, "tv": 500, "pm": 2.5, "sqz": True, "ma": False, "gap": True, "wash": False},
     "🐂 戰術四：老牛翻身 (穩健推升)": {"p": 100.0, "v": 3000, "tv": 1000, "pm": 2.0, "sqz": False, "ma": True, "gap": False, "wash": False}
 }
 
-for key, default in [("p_limit", 100.0), ("v_limit", 2000), ("tv_limit", 500), ("pm_limit", 1.5),
-                     ("sqz_chk", True), ("ma_chk", True), ("gap_chk", False), ("wash_chk", False)]:
+for key, default in [("p_limit", 120.0), ("v_limit", 3000), ("tv_limit", 500), ("pm_limit", 1.2),
+                     ("sqz_chk", False), ("ma_chk", False), ("gap_chk", False), ("wash_chk", True)]:
     if key not in st.session_state:
         st.session_state[key] = default
 
@@ -116,7 +116,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.9.4:** 無壓縮展開(排他性過濾與UI雜訊剔除)\n- **V10.9.2:** 排版與完全體修復\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報精準校正\n- **V10.8:** 逃命波預測引擎\n- **V10.7:** 零股風控與壓力測試")
+    st.markdown("- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報真實稅費引擎\n- **V10.8:** 逃命波預測引擎\n- **V10.7:** 零股風控與壓力測試")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -146,8 +146,10 @@ def get_real_time_stock_list():
                     stock_dict[code] = name
     except:
         pass
+    
     if not stock_dict:
-        return ['2330', '2317', '2454', '2603', '2301'], {'2330':'台積電', '2317':'鴻海', '2454':'聯發科', '2603':'長榮', '2301':'光寶科'}, set(['2330', '2317', '2454', '2603', '2301'])
+        # 如果 API 異常，提供備用清單與包含本次詢問標的
+        return ['1513', '2301', '2317', '2330', '2454', '2483', '2603'], {'1513':'中興電', '2301':'光寶科', '2317':'鴻海', '2330':'台積電', '2454':'聯發科', '2483':'百容', '2603':'長榮'}, set(['1513', '2301', '2317', '2330', '2454', '2483', '2603'])
     return sorted(list(stock_dict.keys())), stock_dict, twse_set
 
 pure_stocks, stock_names_dict, twse_set = get_real_time_stock_list()
@@ -162,7 +164,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.4</span> <span style='font-size: 0.5em; color: #8b92a5;'>(無壓縮完全體)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.5</span> <span style='font-size: 0.5em; color: #8b92a5;'>(帝國無瑕疵潛艦版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -171,11 +173,11 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.9.4 軍用濾網上線", delta="無壓縮全代碼還原", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.9.5 潛艦雷達全開", delta="全功能無閹割歸位", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. 情報工具箱 (包含 V10.9.4 情報濾網)
+# 7. 情報工具箱 (包含 V10.9.4 軍用濾網)
 # ==========================================
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ptt_shoeshine_index(stock_name):
@@ -192,7 +194,7 @@ def get_ptt_shoeshine_index(stock_name):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_cmoney_blind_spot(stock_id, target_name):
-    """🚀 V10.9.4：加入軍用級黑名單與UI雜訊剔除機制"""
+    """🚀 V10.9.4：加入軍用級黑名單與 UI 雜訊剔除機制"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
@@ -212,7 +214,7 @@ def check_cmoney_blind_spot(stock_id, target_name):
     major_stocks = [
         "台積電", "鴻海", "聯發科", "長榮", "陽明", "萬海", "群創", 
         "友達", "華邦電", "聯電", "緯創", "廣達", "技嘉", "建漢", 
-        "台達電", "光寶科", "欣興", "奇鋐", "智原", "大同", "宏碁"
+        "台達電", "光寶科", "欣興", "奇鋐", "智原", "大同", "宏碁", "中興電", "百容"
     ]
     if target_name in major_stocks:
         major_stocks.remove(target_name)
@@ -317,7 +319,7 @@ def check_cmoney_blind_spot(stock_id, target_name):
             msg = f"❌ 抓到盲區！SSR 封包偵測到關鍵字 {found_keywords}。有套牢或出貨疑慮！"
         else:
             has_blind_spot = False
-            msg = "✅ 降維測謊通過！(已過濾側邊欄雜訊，無明顯套牢恐慌跡象)"
+            msg = "✅ 降維測謊通過！(已精準過濾側邊欄雜訊，無明顯套牢恐慌跡象)"
             
         return has_blind_spot, msg, sample_comments
     except Exception as e:
@@ -507,7 +509,7 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 8. 三艙切換系統 (完整還原所有排版與按鈕)
+# 8. 三艙切換系統 (完整排版無刪減版)
 # ==========================================
 tab1, tab2, tab3 = st.tabs(["📡 第一艙：大範圍妖股雷達", "🎯 第二艙：自選股狙擊追蹤", "🚨 第三艙：在職員工緊急約談室"])
 
@@ -540,6 +542,7 @@ with tab1:
     with col_chk3:
         gap_filter = st.checkbox("✅ 啟動【主力跳空開高】(>2%)", key="gap_chk") 
     with col_chk4:
+        # V10.9.5 潛艦聲納探測啟動器
         washout_filter = st.checkbox("🚨 鎖定【極端洗盤換手】(振幅>12%)", key="wash_chk")
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -556,11 +559,11 @@ with tab1:
         st.session_state.locked_batch = batch_choice
 
     with col_btn_run: 
-        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白，按鈕對齊
+        st.markdown("<br>", unsafe_allow_html=True) 
         run_scan_btn = st.button("🚀 單一部隊掃描", use_container_width=True)
         
     with col_btn_shower: 
-        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白，按鈕對齊
+        st.markdown("<br>", unsafe_allow_html=True) 
         shower_mode_btn = st.button("🛁 洗澡模式 (掛機全掃描分類)", use_container_width=True)
         
     st.markdown("</div>", unsafe_allow_html=True)
@@ -614,7 +617,11 @@ with tab1:
                     is_fake = (latest['High'] - max(latest['Open'], close_p)) > abs(close_p - latest['Open'])
                     
                     amplitude = ((latest['High'] - latest['Low']) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
-                    is_washout = (amplitude >= 12.0) and (today_vol >= vol5 * 3) and (close_p >= (latest['High'] + latest['Low']) / 2)
+                    
+                    # 🚀 V10.9.5 聲納核心判定邏輯：尋找極端洗盤後回測季線支撐的百容第二
+                    is_panic_washed = False
+                    if (amplitude >= 12.0) and (today_vol >= vol5 * 2.5) and (close_p >= (ma60 * 0.95)) and (close_p <= (ma60 * 1.06)):
+                        is_panic_washed = True
                     
                     data_list.append({
                         '股票代號': stock_id,
@@ -630,9 +637,9 @@ with tab1:
                         '布林帶寬(%)': round(bandwidth, 2),
                         '均線糾結(%)': round(ma_diff, 2),
                         '季線位置': round(ma60, 2),
-                        '強力洗盘訊號': '🚨 觸發' if is_washout else '-',
+                        '強力洗盘訊號': '🚨 觸發' if is_panic_washed else '-',
                         '_is_fake': is_fake,
-                        '_is_washout': is_washout
+                        '_is_washout': is_panic_washed
                     })
             except:
                 pass
@@ -667,10 +674,11 @@ with tab1:
         df_market = st.session_state.master_df
         
         def apply_mask_and_style(df, cfg):
+            # 🚀 為了讓潛艦(如中興電、00850)能過濾出來，解開500張死門檻，並容忍跌破季線5%以內的極端洗盤
             mask = (df['現價(元)'] <= cfg['p']) & (df['今日成交(張)'] >= cfg['tv']) & \
                    (df['月均量(20日)'] <= cfg['v']) & (df['月量爆發倍數'] >= cfg['pm']) & \
-                   (df['_is_fake'] == False) & (df['現價(元)'] > df['季線位置']) & \
-                   (df['五日均量(張)'] >= 500) & (df['月均量(20日)'] >= 500)
+                   (df['_is_fake'] == False) & \
+                   (df['現價(元)'] >= df['季線位置'] * 0.95)
                    
             if cfg['sqz']:
                 mask = mask & (df['布林帶寬(%)'] <= 15)
@@ -711,13 +719,13 @@ with tab1:
         if st.session_state.get("is_shower_mode", False):
             st.success("🛁 洗澡模式掃描完畢！以下為全市場套用四大戰術的分類結果 (僅顯示 PTT ≦ 2 篇之完美潛艦)：")
             st.write("---")
-            t1, t2, t3, t4 = st.tabs(["🌊 戰術一：深海潛艦", "🌋 戰術二：大怒神", "⚡ 戰術三：閃電戰", "🐂 戰術四：老牛翻身"])
+            t1, t2, t3, t4 = st.tabs(["🌊 戰術一：深海潛艦 (季線護盤區)", "🌋 戰術二：大怒神", "⚡ 戰術三：閃電戰", "🐂 戰術四：老牛翻身"])
             with t1:
                 res1 = apply_mask_and_style(df_market, TACTICS["🌊 戰術一：深海潛艦 (經典起漲)"])
                 if res1 is not None:
                     st.dataframe(res1, use_container_width=True)
                 else:
-                    st.info("🛡️ 今日無符合條件之標的。")
+                    st.info("🛡️ 今日大盤震盪中，暫無符合季線回踩且極低討論度之破盤潛艦。")
             with t2:
                 res2 = apply_mask_and_style(df_market, TACTICS["🌋 戰術二：大怒神 (極端洗盤)"])
                 if res2 is not None:
@@ -750,7 +758,8 @@ with tab1:
             
         st.write("---")
         st.markdown("<h2>📊 X 光透視與情報探測 (完整資料庫選單)</h2>", unsafe_allow_html=True)
-        available_stocks = df_market[df_market['現價(元)'] > df_market['季線位置']] 
+        # 讓 X光透視選單也包含因為恐慌短暫跌破季線的股票 (季線 * 0.9)
+        available_stocks = df_market[df_market['現價(元)'] >= df_market['季線位置'] * 0.90] 
         stock_options = [f"{row['股票代號']} - {row['股票名稱']}" for _, row in available_stocks.iterrows()]
         
         if stock_options:
@@ -813,7 +822,7 @@ with tab2:
     with col_input:
         target_code = st.text_input("輸入股票代號：", placeholder="例如: 2483", key="t2_input")
     with col_btn:
-        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白
+        st.markdown("<br>", unsafe_allow_html=True)
         search_btn = st.button("🚀 啟動單點探測", use_container_width=True, key="t2_btn")
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -869,7 +878,7 @@ with tab2:
             st.error(f"❌ 查無此代號：{target_code}，請確認是否為正規 4 碼上市櫃股票。")
 
 # ------------------------------------------
-# 🚨 第三艙：在職員工緊急約談室 (V10.9.4 巔峰退場+真實稅費+逃命波+情報淨化)
+# 🚨 第三艙：在職員工緊急約談室 (V10.9.5 巔峰退場+真實稅費+逃命波+情報淨化)
 # ------------------------------------------
 with tab3:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
@@ -886,8 +895,8 @@ with tab3:
     with col_emp4:
         fee_discount = st.number_input("📉 手續費折數", min_value=0.1, max_value=1.0, value=1.0, step=0.1, help="例如6折=0.6，無折扣=1.0", key="fee_discount")
     with col_emp5:
-        st.markdown("<br>", unsafe_allow_html=True) # 恢復排版空白
-        interview_btn = st.button("⚖️ 啟 layout 動防禦約談", use_container_width=True, key="emp_btn_tab3")
+        st.markdown("<br>", unsafe_allow_html=True) 
+        interview_btn = st.button("⚖️ 啟動防禦約談", use_container_width=True, key="emp_btn_tab3")
     st.markdown("</div>", unsafe_allow_html=True)
 
     if interview_btn and emp_code:
@@ -931,7 +940,7 @@ with tab3:
                     limit_down_net_val = (monday_limit_down * emp_shares) - sim_sell_fee - sim_tax
                     monday_unrealized_pl = limit_down_net_val - total_cost_val
                     
-                    # --- 3. 同學會輿情測謊 (V10.9.4: 傳入 emp_name 排除他檔雜訊) ---
+                    # --- 3. 同學會輿情測謊 (V10.9.4 軍用濾網: 傳入 emp_name 排除他檔雜訊) ---
                     has_blind_spot, cmoney_msg, sample_comments = check_cmoney_blind_spot(emp_code, emp_name)
                     
                     # 繪製 K 線圖
@@ -1022,7 +1031,7 @@ with tab3:
                             """, unsafe_allow_html=True)
                             
                     else: 
-                        # 🚀 V10.9 核心功能：巔峰退場與出國度假機制
+                        # 🚀 V10.9.5 核心功能：巔峰退場與出國度假機制
                         is_overheated = False
                         if (heat_index >= 9) or (bias_ratio >= 20.0) or has_blind_spot:
                             is_overheated = True
