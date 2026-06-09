@@ -524,7 +524,7 @@ with tab1:
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        price_limit = st.slider("💰 銅板股上限 (現價)", 10.0, 150.0, st.session_state.p_limit, step=1.0, key="p_limit")
+        price_limit = st.slider("💰 銅板股上限 (現價)", 10.0, 1500.0, st.session_state.p_limit, step=1.0, key="p_limit")
     with col2:
         vol_limit = st.slider("💧 邊緣人指數上限 (月均量)", 10, 5000, st.session_state.v_limit, step=10, key="v_limit") 
     with col3:
