@@ -20,7 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.9.6 | 量價終極版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.9.7 | 戰術全開版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統
@@ -116,7 +116,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報真實稅費引擎\n- **V10.8:** 逃命波預測引擎")
+    st.markdown("- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股)\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化\n- **V10.9:** 巔峰度假退場機制\n- **V10.8:** 逃命波預測引擎")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -164,7 +164,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.6</span> <span style='font-size: 0.5em; color: #8b92a5;'>(量價終極版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.7</span> <span style='font-size: 0.5em; color: #8b92a5;'>(戰術全開版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -173,11 +173,11 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.9.6 量價解析引擎上線", delta="100% 無壓縮全展開", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.9.7 情報容忍度解鎖", delta="可強制捕捉熱門妖股", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. 情報工具箱 (包含 V10.9.6 情報濾網)
+# 7. 情報工具箱 (包含 V10.9.4 軍用濾網)
 # ==========================================
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ptt_shoeshine_index(stock_name):
@@ -543,7 +543,6 @@ with tab1:
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        # 🚀 V10.9.6: 股價掃描上限解鎖至 500 元
         price_limit = st.slider("💰 股價掃描上限 (現價)", 10.0, 500.0, st.session_state.p_limit, step=1.0, key="p_limit")
     with col2:
         vol_limit = st.slider("💧 邊緣人指數上限 (月均量)", 10, 5000, st.session_state.v_limit, step=10, key="v_limit") 
@@ -566,6 +565,18 @@ with tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # 🚀 V10.9.7: PTT 情報容忍度滑桿解鎖
+    ptt_tolerance = st.radio(
+        "🕵️‍♂️ PTT 擦鞋童情報容忍度 (動態防禦網)：",
+        [
+            "🟢 嚴格隱形 (≦ 2 篇) - 尋找無人問津的底部起漲點",
+            "🟡 動能發酵 (≦ 9 篇) - 尋找剛被關注的主流強勢股",
+            "🔴 無差別大亂鬥 (不限制) - 顯示所有飆股 (極高風險，請小心出貨倒貨！)"
+        ],
+        horizontal=True
+    )
+    st.markdown("<br>", unsafe_allow_html=True)
+
     col_batch, col_btn_run, col_btn_shower = st.columns([1.5, 1, 1.5])
     
     def format_batch_display(opt):
@@ -705,7 +716,7 @@ with tab1:
     if "master_df" in st.session_state:
         df_market = st.session_state.master_df
         
-        def apply_mask_and_style(df, cfg):
+        def apply_mask_and_style(df, cfg, ptt_tol):
             mask = (df['現價(元)'] <= cfg['p']) & (df['今日成交(張)'] >= cfg['tv']) & \
                    (df['月均量(20日)'] <= cfg['v']) & (df['月量爆發倍數'] >= cfg['pm']) & \
                    (df['_is_fake'] == False) & \
@@ -722,6 +733,7 @@ with tab1:
             
             res_df = df[mask].drop(columns=['_is_fake', '_is_washout']).drop_duplicates(subset=['股票代號']).reset_index(drop=True)
             
+            # 🚀 V10.9.7: PTT 情報暗殺網動態控制
             if not res_df.empty:
                 with st.spinner("🕵️‍♂️ 啟動終極情報暗殺：自動探測 PTT 散戶熱度過濾中..."):
                     ptt_indices = []
@@ -731,7 +743,14 @@ with tab1:
                         time.sleep(0.5)
                         
                     res_df['PTT熱度'] = ptt_indices
-                    res_df = res_df[(res_df['PTT熱度'] >= 0) & (res_df['PTT熱度'] <= 2)].reset_index(drop=True)
+                    
+                    if "嚴格隱形" in ptt_tol:
+                        res_df = res_df[(res_df['PTT熱度'] >= 0) & (res_df['PTT熱度'] <= 2)].reset_index(drop=True)
+                    elif "動能發酵" in ptt_tol:
+                        res_df = res_df[(res_df['PTT熱度'] >= 0) & (res_df['PTT熱度'] <= 9)].reset_index(drop=True)
+                    else:
+                        # 無差別大亂鬥：只排除 -1 (網路連線錯誤)
+                        res_df = res_df[res_df['PTT熱度'] >= 0].reset_index(drop=True)
                     
                     if res_df.empty:
                         return None
@@ -746,44 +765,45 @@ with tab1:
             return None
 
         if st.session_state.get("is_shower_mode", False):
-            st.success("🛁 洗澡模式掃描完畢！以下為全市場套用四大戰術的分類結果 (僅顯示 PTT ≦ 2 篇之完美潛艦)：")
+            # 🚀 根據所選的容忍度顯示不同的成功訊息
+            st.success(f"🛁 洗澡模式掃描完畢！目前情報容忍度：【{ptt_tolerance}】。以下為分類結果：")
             st.write("---")
             t1, t2, t3, t4 = st.tabs(["🌊 戰術一：深海潛艦 (季線護盤區)", "🌋 戰術二：大怒神", "⚡ 戰術三：閃電戰", "🐂 戰術四：老牛翻身"])
             with t1:
-                res1 = apply_mask_and_style(df_market, TACTICS["🌊 戰術一：深海潛艦 (經典起漲)"])
+                res1 = apply_mask_and_style(df_market, TACTICS["🌊 戰術一：深海潛艦 (經典起漲)"], ptt_tolerance)
                 if res1 is not None:
                     st.dataframe(res1, use_container_width=True)
                 else:
-                    st.info("🛡️ 今日大盤震盪中，暫無符合季線回踩且極低討論度之破盤潛艦。")
+                    st.info("🛡️ 暫無符合目前情報容忍度設定之潛艦標的。")
             with t2:
-                res2 = apply_mask_and_style(df_market, TACTICS["🌋 戰術二：大怒神 (極端洗盤)"])
+                res2 = apply_mask_and_style(df_market, TACTICS["🌋 戰術二：大怒神 (極端洗盤)"], ptt_tolerance)
                 if res2 is not None:
                     st.dataframe(res2, use_container_width=True)
                 else:
-                    st.info("🛡️ 今日無符合條件之標的。")
+                    st.info("🛡️ 暫無符合目前情報容忍度設定之標的。")
             with t3:
-                res3 = apply_mask_and_style(df_market, TACTICS["⚡ 戰術三：閃電戰 (跳空突破)"])
+                res3 = apply_mask_and_style(df_market, TACTICS["⚡ 戰術三：閃電戰 (跳空突破)"], ptt_tolerance)
                 if res3 is not None:
                     st.dataframe(res3, use_container_width=True)
                 else:
-                    st.info("🛡️ 今日無符合條件之標的。")
+                    st.info("🛡️ 暫無符合目前情報容忍度設定之標的。")
             with t4:
-                res4 = apply_mask_and_style(df_market, TACTICS["🐂 戰術四：老牛翻身 (穩健推升)"])
+                res4 = apply_mask_and_style(df_market, TACTICS["🐂 戰術四：老牛翻身 (穩健推升)"], ptt_tolerance)
                 if res4 is not None:
                     st.dataframe(res4, use_container_width=True)
                 else:
-                    st.info("🛡️ 今日無符合條件之標的。")
+                    st.info("🛡️ 暫無符合目前情報容忍度設定之標的。")
         else:
             cfg_custom = {
                 'p': price_limit, 'v': vol_limit, 'tv': min_today_vol, 'pm': power_multiplier,
                 'sqz': squeeze_filter, 'ma': ma_filter, 'gap': gap_filter, 'wash': washout_filter
             }
-            res_custom = apply_mask_and_style(df_market, cfg_custom)
+            res_custom = apply_mask_and_style(df_market, cfg_custom, ptt_tolerance)
             if res_custom is not None:
                 st.write("---")
                 st.dataframe(res_custom, use_container_width=True)
             else:
-                st.info("🛡️ 終極情報暗殺完畢：無符合設定且 PTT 討論低於 2 篇之標的。寧可空手，絕不追高！")
+                st.info("🛡️ 終極情報暗殺完畢：無符合設定與當前情報容忍度之標的。寧可空手，絕不追高！")
             
         st.write("---")
         st.markdown("<h2>📊 X 光透視與情報探測 (完整資料庫選單)</h2>", unsafe_allow_html=True)
@@ -906,7 +926,7 @@ with tab2:
             st.error(f"❌ 查無此代號：{target_code}，請確認是否為正規 4 碼上市櫃股票。")
 
 # ------------------------------------------
-# 🚨 第三艙：在職員工緊急約談室 (V10.9.6 巔峰退場+真實稅費+逃命波+情報淨化)
+# 🚨 第三艙：在職員工緊急約談室 (V10.9.7 巔峰退場+真實稅費+逃命波+情報淨化)
 # ------------------------------------------
 with tab3:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
