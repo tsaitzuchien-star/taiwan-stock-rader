@@ -20,7 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.9.5 | 帝國無瑕疵潛艦版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.9.6 | 量價終極版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統
@@ -116,7 +116,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報真實稅費引擎\n- **V10.8:** 逃命波預測引擎\n- **V10.7:** 零股風控與壓力測試")
+    st.markdown("- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化\n- **V10.9:** 巔峰度假退場機制\n- **V10.8.2:** 財報真實稅費引擎\n- **V10.8:** 逃命波預測引擎")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -148,8 +148,8 @@ def get_real_time_stock_list():
         pass
     
     if not stock_dict:
-        # 如果 API 異常，提供備用清單與包含本次詢問標的
-        return ['1513', '2301', '2317', '2330', '2454', '2483', '2603'], {'1513':'中興電', '2301':'光寶科', '2317':'鴻海', '2330':'台積電', '2454':'聯發科', '2483':'百容', '2603':'長榮'}, set(['1513', '2301', '2317', '2330', '2454', '2483', '2603'])
+        # 備用清單
+        return ['1513', '2301', '2317', '2330', '2454', '2483', '2603', '3290'], {'1513':'中興電', '2301':'光寶科', '2317':'鴻海', '2330':'台積電', '2454':'聯發科', '2483':'百容', '2603':'長榮', '3290':'東浦'}, set(['1513', '2301', '2317', '2330', '2454', '2483', '2603', '3290'])
     return sorted(list(stock_dict.keys())), stock_dict, twse_set
 
 pure_stocks, stock_names_dict, twse_set = get_real_time_stock_list()
@@ -164,7 +164,7 @@ if pure_stocks:
 # ==========================================
 # 6. 國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.5</span> <span style='font-size: 0.5em; color: #8b92a5;'>(帝國無瑕疵潛艦版)</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.6</span> <span style='font-size: 0.5em; color: #8b92a5;'>(量價終極版)</span></h1>", unsafe_allow_html=True)
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -173,11 +173,11 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.9.5 潛艦雷達全開", delta="全功能無閹割歸位", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.9.6 量價解析引擎上線", delta="100% 無壓縮全展開", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. 情報工具箱 (包含 V10.9.4 軍用濾網)
+# 7. 情報工具箱 (包含 V10.9.6 情報濾網)
 # ==========================================
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ptt_shoeshine_index(stock_name):
@@ -204,17 +204,15 @@ def check_cmoney_blind_spot(stock_id, target_name):
     has_blind_spot = False
     msg = ""
     
-    # 🚨 1. 嚴格過濾 UI 與側邊欄雜訊
     exclude_ui_junk = [
         "自選", "成交量", "▼", "▲", "股市爆料", "分享你的看法", 
         "登入", "註冊", "熱門文章", "維持率", "粉絲", "追蹤", "發文", "人氣"
     ]
     
-    # 🚨 2. 嚴格黑名單 (常見於側邊欄排行榜的其他股票)
     major_stocks = [
         "台積電", "鴻海", "聯發科", "長榮", "陽明", "萬海", "群創", 
         "友達", "華邦電", "聯電", "緯創", "廣達", "技嘉", "建漢", 
-        "台達電", "光寶科", "欣興", "奇鋐", "智原", "大同", "宏碁", "中興電", "百容"
+        "台達電", "光寶科", "欣興", "奇鋐", "智原", "大同", "宏碁", "中興電", "百容", "東浦"
     ]
     if target_name in major_stocks:
         major_stocks.remove(target_name)
@@ -264,7 +262,6 @@ def check_cmoney_blind_spot(stock_id, target_name):
             clean_text = re.sub(r'<[^>]+>', '', text).strip()
             
             if 5 <= len(clean_text) <= 150 and re.search(r'[\u4e00-\u9fa5]', clean_text):
-                # 規則 A: 過濾 UI 雜訊按鈕
                 is_junk = False
                 for junk in exclude_ui_junk:
                     if junk in clean_text:
@@ -273,7 +270,6 @@ def check_cmoney_blind_spot(stock_id, target_name):
                 if is_junk:
                     continue
                     
-                # 規則 B: 過濾提到排行榜其他股票的句子
                 is_major = False
                 for s in major_stocks:
                     if s in clean_text:
@@ -282,11 +278,9 @@ def check_cmoney_blind_spot(stock_id, target_name):
                 if is_major:
                     continue
                     
-                # 規則 C: 過濾帶有時間戳記的 UI 標籤 (例如: 星期六 17:38)
                 if re.search(r'(星期[一二三四五六日]|\d{1,2}/\d{1,2})\s*\d{1,2}:\d{2}', clean_text):
                     continue
                     
-                # 規則 D: 排他性過濾 (如果句子裡有4位數字，但不是我們查的股票，就跳過)
                 four_digits = re.findall(r'\b\d{4}\b', clean_text)
                 is_other = False
                 for d in four_digits:
@@ -296,7 +290,6 @@ def check_cmoney_blind_spot(stock_id, target_name):
                 if is_other:
                     continue
 
-                # 通過所有濾網，收錄為純淨情報
                 if clean_text not in seen:
                     seen.add(clean_text)
                     sample_comments.append(clean_text)
@@ -390,9 +383,25 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
         time.sleep(1.5) 
         
         latest = df_chart.iloc[-1]
+        yesterday_close = df_chart.iloc[-2]['Close'] if len(df_chart) > 1 else latest['Close']
+        
         ma20 = df_chart['MA20'].iloc[-1] if 'MA20' in df_chart else latest['Close']
         ma60 = df_chart['MA60'].iloc[-1] if 'MA60' in df_chart else latest['Close']
         vol5_mean = (df_chart['Volume']/1000).tail(5).mean()
+        
+        # 🚀 V10.9.6: 成長 K 線與多空力道運算
+        open_p = latest['Open']
+        close_p = latest['Close']
+        high_p = latest['High']
+        low_p = latest['Low']
+        today_vol = latest['Volume'] / 1000
+        
+        range_hl = high_p - low_p
+        power_val = ((close_p - open_p) / range_hl) * today_vol if range_hl > 0 else 0.0
+        
+        body_pct = ((close_p - open_p) / yesterday_close) * 100 if yesterday_close > 0 else 0
+        upper_shadow = high_p - max(close_p, open_p)
+        is_growth = (body_pct >= 3.0) and (today_vol > vol5_mean) and (upper_shadow <= range_hl * 0.25)
         
         tech_score = 60 
         tech_exp = "🔹 基礎底分：60分<br>"
@@ -410,9 +419,19 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
             
         if latest['Volume']/1000 > vol5_mean: 
             tech_score += 10
-            tech_exp += "✅ 今日出量攻擊 (+10)"
+            tech_exp += "✅ 今日出量攻擊 (+10)<br>"
         else:
-            tech_exp += "❌ 今日量能萎縮 (+0)"
+            tech_exp += "❌ 今日量能萎縮 (+0)<br>"
+            
+        # 🚀 V10.9.6 加分項
+        if is_growth:
+            tech_score += 15
+            tech_exp += "🌟 出現標準成長紅K (+15)<br>"
+        if power_val > vol5_mean * 0.5:
+            tech_score += 10
+            tech_exp += "🔥 多空力道強勢碾壓 (+10)"
+        elif power_val < 0:
+            tech_exp += "⚠️ 實體收黑，空方力道主導 (+0)"
             
         tech_score = min(100, int(tech_score))
         
@@ -468,7 +487,7 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
     col_f1, col_f2, col_f3, col_f4 = st.columns(4)
     
     with col_f1:
-        st.metric("📈 技術面體能", f"{tech_score} 分")
+        st.metric("📈 技術面體能", f"{tech_score} 分", f"多空力道: {power_val:.1f}")
         st.progress(tech_score / 100)
         st.markdown(f"<div class='score-exp'>{tech_exp}</div>", unsafe_allow_html=True)
     
@@ -524,7 +543,8 @@ with tab1:
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        price_limit = st.slider("💰 銅板股上限 (現價)", 10.0, 1500.0, st.session_state.p_limit, step=1.0, key="p_limit")
+        # 🚀 V10.9.6: 股價掃描上限解鎖至 500 元
+        price_limit = st.slider("💰 股價掃描上限 (現價)", 10.0, 500.0, st.session_state.p_limit, step=1.0, key="p_limit")
     with col2:
         vol_limit = st.slider("💧 邊緣人指數上限 (月均量)", 10, 5000, st.session_state.v_limit, step=10, key="v_limit") 
     with col3:
@@ -542,7 +562,6 @@ with tab1:
     with col_chk3:
         gap_filter = st.checkbox("✅ 啟動【主力跳空開高】(>2%)", key="gap_chk") 
     with col_chk4:
-        # V10.9.5 潛艦聲納探測啟動器
         washout_filter = st.checkbox("🚨 鎖定【極端洗盤換手】(振幅>12%)", key="wash_chk")
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -602,7 +621,11 @@ with tab1:
                 if not df_history.empty and len(df_history) >= 60:
                     latest = df_history.iloc[-1]
                     yesterday = df_history.iloc[-2]
+                    
+                    open_p = latest['Open']
                     close_p = latest['Close']
+                    high_p = latest['High']
+                    low_p = latest['Low']
                     today_vol = latest['Volume'] / 1000
                     
                     vol5 = df_history['Volume'].tail(5).mean() / 1000
@@ -613,15 +636,22 @@ with tab1:
                     
                     bandwidth = (((ma20 + 2*std20) - (ma20 - 2*std20)) / ma20) * 100 if ma20 > 0 else 999
                     ma_diff = (abs(ma20 - ma60) / ma60) * 100 if ma60 > 0 else 999
-                    gap_up_pct = ((latest['Open'] - yesterday['Close']) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
-                    is_fake = (latest['High'] - max(latest['Open'], close_p)) > abs(close_p - latest['Open'])
+                    gap_up_pct = ((open_p - yesterday['Close']) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
+                    is_fake = (high_p - max(open_p, close_p)) > abs(close_p - open_p)
                     
-                    amplitude = ((latest['High'] - latest['Low']) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
+                    amplitude = ((high_p - low_p) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
                     
-                    # 🚀 V10.9.5 聲納核心判定邏輯：尋找極端洗盤後回測季線支撐的百容第二
                     is_panic_washed = False
                     if (amplitude >= 12.0) and (today_vol >= vol5 * 2.5) and (close_p >= (ma60 * 0.95)) and (close_p <= (ma60 * 1.06)):
                         is_panic_washed = True
+                        
+                    # 🚀 V10.9.6: 多空力道引擎與成長K線
+                    range_hl = high_p - low_p
+                    power_val = ((close_p - open_p) / range_hl) * today_vol if range_hl > 0 else 0.0
+                    
+                    body_pct = ((close_p - open_p) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
+                    upper_shadow = high_p - max(close_p, open_p)
+                    is_growth_candle = (body_pct >= 3.0) and (today_vol > vol5) and (upper_shadow <= range_hl * 0.25)
                     
                     data_list.append({
                         '股票代號': stock_id,
@@ -633,6 +663,8 @@ with tab1:
                         '月均量(20日)': round(vol20, 0),
                         '今日成交(張)': round(today_vol, 0),
                         '月量爆發倍數': round(today_vol / vol20, 1) if vol20 > 0 else 0,
+                        '多空力道': round(power_val, 1),
+                        '成長K線': '🌟 確立' if is_growth_candle else '-',
                         '跳空缺口(%)': round(gap_up_pct, 2),
                         '布林帶寬(%)': round(bandwidth, 2),
                         '均線糾結(%)': round(ma_diff, 2),
@@ -674,7 +706,6 @@ with tab1:
         df_market = st.session_state.master_df
         
         def apply_mask_and_style(df, cfg):
-            # 🚀 為了讓潛艦(如中興電、00850)能過濾出來，解開500張死門檻，並容忍跌破季線5%以內的極端洗盤
             mask = (df['現價(元)'] <= cfg['p']) & (df['今日成交(張)'] >= cfg['tv']) & \
                    (df['月均量(20日)'] <= cfg['v']) & (df['月量爆發倍數'] >= cfg['pm']) & \
                    (df['_is_fake'] == False) & \
@@ -691,7 +722,6 @@ with tab1:
             
             res_df = df[mask].drop(columns=['_is_fake', '_is_washout']).drop_duplicates(subset=['股票代號']).reset_index(drop=True)
             
-            # PTT 情報暗殺網
             if not res_df.empty:
                 with st.spinner("🕵️‍♂️ 啟動終極情報暗殺：自動探測 PTT 散戶熱度過濾中..."):
                     ptt_indices = []
@@ -701,7 +731,6 @@ with tab1:
                         time.sleep(0.5)
                         
                     res_df['PTT熱度'] = ptt_indices
-                    # 嚴格過濾：只保留 PTT 熱度 0~2 篇的極度冷門股
                     res_df = res_df[(res_df['PTT熱度'] >= 0) & (res_df['PTT熱度'] <= 2)].reset_index(drop=True)
                     
                     if res_df.empty:
@@ -710,9 +739,9 @@ with tab1:
                     return res_df.style.format({
                         '現價(元)': "{:.2f}", '今日漲跌(%)': "{:.2f}%", '日內振幅(%)': "{:.2f}%", 
                         '五日均量(張)': "{:,.0f}", '月均量(20日)': "{:,.0f}", '今日成交(張)': "{:,.0f}", 
-                        '月量爆發倍數': "{:.1f}x", '跳空缺口(%)': "{:.2f}%", 
-                        '布林帶寬(%)': "{:.2f}%", '均線糾結(%)': "{:.2f}%", '季線位置': "{:.2f}",
-                        'PTT熱度': "{:.0f} 篇"
+                        '月量爆發倍數': "{:.1f}x", '多空力道': "{:.1f}", '成長K線': "{}",
+                        '跳空缺口(%)': "{:.2f}%", '布林帶寬(%)': "{:.2f}%", '均線糾結(%)': "{:.2f}%", 
+                        '季線位置': "{:.2f}", 'PTT熱度': "{:.0f} 篇"
                     }).background_gradient(subset=['月量爆發倍數', '日內振幅(%)'], cmap='Purples')
             return None
 
@@ -758,7 +787,6 @@ with tab1:
             
         st.write("---")
         st.markdown("<h2>📊 X 光透視與情報探測 (完整資料庫選單)</h2>", unsafe_allow_html=True)
-        # 讓 X光透視選單也包含因為恐慌短暫跌破季線的股票 (季線 * 0.9)
         available_stocks = df_market[df_market['現價(元)'] >= df_market['季線位置'] * 0.90] 
         stock_options = [f"{row['股票代號']} - {row['股票名稱']}" for _, row in available_stocks.iterrows()]
         
@@ -878,7 +906,7 @@ with tab2:
             st.error(f"❌ 查無此代號：{target_code}，請確認是否為正規 4 碼上市櫃股票。")
 
 # ------------------------------------------
-# 🚨 第三艙：在職員工緊急約談室 (V10.9.5 巔峰退場+真實稅費+逃命波+情報淨化)
+# 🚨 第三艙：在職員工緊急約談室 (V10.9.6 巔峰退場+真實稅費+逃命波+情報淨化)
 # ------------------------------------------
 with tab3:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
@@ -909,7 +937,6 @@ with tab3:
                 is_otc = False if not twse_set else (emp_code not in twse_set)
                 df_chart = get_kline_data(emp_code, is_otc)
                 
-                # 🚀 抓取 PTT 熱度 (用於判斷是否過熱度假)
                 heat_index = get_ptt_shoeshine_index(emp_name)
                 
                 if not df_chart.empty:
@@ -919,10 +946,8 @@ with tab3:
                     ma20 = df_chart['Close'].rolling(20).mean().iloc[-1]
                     ma60 = df_chart['Close'].rolling(60).mean().iloc[-1]
                     
-                    # 計算乖離率 (判斷是否過熱)
                     bias_ratio = ((current_price - ma60) / ma60) * 100 if ma60 > 0 else 0
                     
-                    # --- 1. 計算真實帳面損益 (真實台股稅費引擎) ---
                     buy_fee = max(1, int(emp_cost * emp_shares * 0.001425 * fee_discount))
                     total_cost_val = (emp_cost * emp_shares) + buy_fee
                     
@@ -933,20 +958,16 @@ with tab3:
                     unrealized_pl = current_net_val - total_cost_val
                     roi_pct = (unrealized_pl / total_cost_val) * 100
                     
-                    # --- 2. 模擬跌停壓力測試 (-10%) ---
                     monday_limit_down = current_price * 0.9
                     sim_sell_fee = max(1, int(monday_limit_down * emp_shares * 0.001425 * fee_discount))
                     sim_tax = int(monday_limit_down * emp_shares * 0.003)
                     limit_down_net_val = (monday_limit_down * emp_shares) - sim_sell_fee - sim_tax
                     monday_unrealized_pl = limit_down_net_val - total_cost_val
                     
-                    # --- 3. 同學會輿情測謊 (V10.9.4 軍用濾網: 傳入 emp_name 排除他檔雜訊) ---
                     has_blind_spot, cmoney_msg, sample_comments = check_cmoney_blind_spot(emp_code, emp_name)
                     
-                    # 繪製 K 線圖
                     draw_plotly_chart(df_chart, emp_name)
                     
-                    # 面板展示
                     st.markdown("#### 💼 第一階段：帳面財務體質掃描 (已計入真實手續費與稅金)")
                     c1, c2, c3, c4 = st.columns(4)
                     c1.metric("當前現價", f"{current_price:.2f} 元", f"均價 {emp_cost:.2f} 元", delta_color="off")
@@ -969,7 +990,6 @@ with tab3:
                     else:
                         st.info("ℹ️ 情報過濾完畢，目標討論區目前無明顯符合條件之恐慌或熱門中文留言。")
                     
-                    # 🚀 逃命波預測 (彼得林區)
                     if current_price < ma60:
                         st.markdown("""
                         <div class='escape-panel'>
@@ -982,7 +1002,6 @@ with tab3:
                         esc_col1.metric("🎯 弱勢反彈逃命點 (10日線)", f"{ma10:.2f} 元", f"距現價約 +{((ma10-current_price)/current_price*100):.1f}% 漲幅")
                         esc_col2.metric("🎯 強勢極限逃命點 (20日線)", f"{ma20:.2f} 元", f"距現價約 +{((ma20-current_price)/current_price*100):.1f}% 漲幅")
                     
-                    # 🤖 AI 總裁情緒校正與最終裁決
                     st.markdown("#### ⚖️ AI 投資長最終裁決建議")
                     
                     if roi_pct < -15: 
@@ -1031,7 +1050,6 @@ with tab3:
                             """, unsafe_allow_html=True)
                             
                     else: 
-                        # 🚀 V10.9.5 核心功能：巔峰退場與出國度假機制
                         is_overheated = False
                         if (heat_index >= 9) or (bias_ratio >= 20.0) or has_blind_spot:
                             is_overheated = True
