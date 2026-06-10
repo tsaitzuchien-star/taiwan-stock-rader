@@ -20,7 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.9.7 | 戰術全開版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.9.8 | 主控升級版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統
@@ -103,20 +103,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 4. 側邊欄：總裁控制台
+# 4. 側邊欄：開發日誌 (按鈕已移出)
 # ==========================================
 with st.sidebar:
-    st.markdown("### 🏢 總裁控制台")
-    st.markdown("<p style='color:#8b92a5; font-size:0.9em;'>若情報網卡住，請點擊下方按鈕強制重啟。</p>", unsafe_allow_html=True)
-    if st.button("🔄 重啟情報網 (清除快取)", use_container_width=True):
-        st.cache_data.clear()
-        st.success("✅ 快取已清除，情報網重置成功！")
-        time.sleep(1)
-        st.rerun()
-    
-    st.markdown("---")
-    st.markdown("### 👨‍💻 開發日誌")
-    st.markdown("- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股)\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化\n- **V10.9:** 巔峰度假退場機制\n- **V10.8:** 逃命波預測引擎")
+    st.markdown("### 👨‍💻 戰情室開發日誌")
+    st.markdown("- **V10.9.8:** 移除側邊欄，重啟按鈕移至主畫面\n- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股)\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化\n- **V10.9:** 巔峰度假退場機制")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -162,9 +153,19 @@ if pure_stocks:
     batch_options.append("隨機游擊隊 (全市場隨機抽 140 檔)")
 
 # ==========================================
-# 6. 國庫風控面板 
+# 6. 主標題、全域控制鍵與國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.7</span> <span style='font-size: 0.5em; color: #8b92a5;'>(戰術全開版)</span></h1>", unsafe_allow_html=True)
+title_col, btn_col = st.columns([4, 1])
+with title_col:
+    st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.8</span> <span style='font-size: 0.5em; color: #8b92a5;'>(主控升級版)</span></h1>", unsafe_allow_html=True)
+with btn_col:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🔄 重啟情報網 (清除快取)", use_container_width=True):
+        st.cache_data.clear()
+        st.success("✅ 快取已清除，情報網重置成功！")
+        time.sleep(1)
+        st.rerun()
+
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
@@ -173,7 +174,7 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.9.7 情報容忍度解鎖", delta="可強制捕捉熱門妖股", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.9.8 情報網按鈕前置", delta="作戰效率最佳化", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
@@ -194,7 +195,6 @@ def get_ptt_shoeshine_index(stock_name):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_cmoney_blind_spot(stock_id, target_name):
-    """🚀 V10.9.4：加入軍用級黑名單與 UI 雜訊剔除機制"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
@@ -389,7 +389,6 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
         ma60 = df_chart['MA60'].iloc[-1] if 'MA60' in df_chart else latest['Close']
         vol5_mean = (df_chart['Volume']/1000).tail(5).mean()
         
-        # 🚀 V10.9.6: 成長 K 線與多空力道運算
         open_p = latest['Open']
         close_p = latest['Close']
         high_p = latest['High']
@@ -423,7 +422,6 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
         else:
             tech_exp += "❌ 今日量能萎縮 (+0)<br>"
             
-        # 🚀 V10.9.6 加分項
         if is_growth:
             tech_score += 15
             tech_exp += "🌟 出現標準成長紅K (+15)<br>"
@@ -528,7 +526,7 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 8. 三艙切換系統 (完整排版無刪減版)
+# 8. 三艙切換系統 
 # ==========================================
 tab1, tab2, tab3 = st.tabs(["📡 第一艙：大範圍妖股雷達", "🎯 第二艙：自選股狙擊追蹤", "🚨 第三艙：在職員工緊急約談室"])
 
@@ -565,7 +563,6 @@ with tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # 🚀 V10.9.7: PTT 情報容忍度滑桿解鎖
     ptt_tolerance = st.radio(
         "🕵️‍♂️ PTT 擦鞋童情報容忍度 (動態防禦網)：",
         [
@@ -656,7 +653,6 @@ with tab1:
                     if (amplitude >= 12.0) and (today_vol >= vol5 * 2.5) and (close_p >= (ma60 * 0.95)) and (close_p <= (ma60 * 1.06)):
                         is_panic_washed = True
                         
-                    # 🚀 V10.9.6: 多空力道引擎與成長K線
                     range_hl = high_p - low_p
                     power_val = ((close_p - open_p) / range_hl) * today_vol if range_hl > 0 else 0.0
                     
@@ -733,7 +729,6 @@ with tab1:
             
             res_df = df[mask].drop(columns=['_is_fake', '_is_washout']).drop_duplicates(subset=['股票代號']).reset_index(drop=True)
             
-            # 🚀 V10.9.7: PTT 情報暗殺網動態控制
             if not res_df.empty:
                 with st.spinner("🕵️‍♂️ 啟動終極情報暗殺：自動探測 PTT 散戶熱度過濾中..."):
                     ptt_indices = []
@@ -749,7 +744,6 @@ with tab1:
                     elif "動能發酵" in ptt_tol:
                         res_df = res_df[(res_df['PTT熱度'] >= 0) & (res_df['PTT熱度'] <= 9)].reset_index(drop=True)
                     else:
-                        # 無差別大亂鬥：只排除 -1 (網路連線錯誤)
                         res_df = res_df[res_df['PTT熱度'] >= 0].reset_index(drop=True)
                     
                     if res_df.empty:
@@ -765,7 +759,6 @@ with tab1:
             return None
 
         if st.session_state.get("is_shower_mode", False):
-            # 🚀 根據所選的容忍度顯示不同的成功訊息
             st.success(f"🛁 洗澡模式掃描完畢！目前情報容忍度：【{ptt_tolerance}】。以下為分類結果：")
             st.write("---")
             t1, t2, t3, t4 = st.tabs(["🌊 戰術一：深海潛艦 (季線護盤區)", "🌋 戰術二：大怒神", "⚡ 戰術三：閃電戰", "🐂 戰術四：老牛翻身"])
@@ -825,7 +818,7 @@ with tab1:
                 st.markdown("<div class='shoeshine-panel'>", unsafe_allow_html=True)
                 st.markdown("#### 🕵️‍♂️ 擦鞋童警報器 (PTT 散戶狂熱指數)")
                 if heat_index == -1:
-                    st.warning("⚠️ 情報網連線異常，若需重試請點擊左側『重啟情報網』。")
+                    st.warning("⚠️ 情報網連線異常，若需重試請點擊主畫面上方的『重啟情報網 (清除快取)』按鈕。")
                 elif heat_index <= 2:
                     st.success(f"🟢 **【完美潛伏期】** PTT 討論僅 {heat_index} 篇！主力偷偷吃貨中。")
                 elif heat_index <= 9:
@@ -887,7 +880,7 @@ with tab2:
                 st.markdown("<div class='shoeshine-panel'>", unsafe_allow_html=True)
                 st.markdown("#### 🕵️‍♂️ 擦鞋童警報器 (PTT 散戶狂熱指數)")
                 if heat_index == -1:
-                    st.warning("⚠️ 情報網連線異常，若需重試請點擊左側『重啟情報網』。")
+                    st.warning("⚠️ 情報網連線異常，若需重試請點擊主畫面上方的『重啟情報網 (清除快取)』按鈕。")
                 elif heat_index <= 2:
                     st.success(f"🟢 **【完美潛伏期】** PTT 討論僅 {heat_index} 篇！")
                 elif heat_index <= 9:
@@ -926,7 +919,7 @@ with tab2:
             st.error(f"❌ 查無此代號：{target_code}，請確認是否為正規 4 碼上市櫃股票。")
 
 # ------------------------------------------
-# 🚨 第三艙：在職員工緊急約談室 (V10.9.7 巔峰退場+真實稅費+逃命波+情報淨化)
+# 🚨 第三艙：在職員工緊急約談室 (V10.9.8 巔峰退場+真實稅費+逃命波+情報淨化)
 # ------------------------------------------
 with tab3:
     st.markdown("<div class='control-panel'>", unsafe_allow_html=True)
