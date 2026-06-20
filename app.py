@@ -712,6 +712,14 @@ with tab1:
     if "master_df" in st.session_state:
         df_market = st.session_state.master_df
         
+        # ================= [🛡️ 戰情室防禦裝甲 (攔截空資料與格式異常)] =================
+        if df_market is None or df_market.empty or '現價(元)' not in df_market.columns:
+            st.error("🚨 戰情室警報：雷達掃描未獲取有效數據！(資料表為空)")
+            st.warning("👉 原因研判：Yahoo Finance 金融數據源暫時阻擋連線或回傳空值，導致本次部隊掃描抓不到任何符合格式的 K 線資料。")
+            st.info("💡 解決方案：這不是您的程式寫錯！請點擊右上角「🔄 重啟情報網 (清除快取)」重置連線，或換一個掃描部隊重試。")
+            st.stop() # 強制終止，完美保護下方所有的 UI 與運算邏輯不崩潰！
+        # ==============================================================================
+
         def apply_mask_and_style(df, cfg, ptt_tol):
             mask = (df['現價(元)'] <= cfg['p']) & (df['今日成交(張)'] >= cfg['tv']) & \
                    (df['月均量(20日)'] <= cfg['v']) & (df['月量爆發倍數'] >= cfg['pm']) & \
@@ -1093,7 +1101,7 @@ with tab3:
                             <div class='hold-alert'>
                             <h3 style='color: #26a69a; margin-top: 0;'>✅ 裁決：防禦深厚，持續聘用！</h3>
                             <p><b>分析報告：</b> 成本夠低，就算跌停也遠高於成本與季線，無庸置疑的好員工。</p>
-                            <p><b>執行動作：</b> 抱緊處理，準備開心去福岡玩！</p>
+                            <p><b>執行動作：</b> 抱緊處理，準備開心去玩！</p>
                             </div>
                             """, unsafe_allow_html=True)
                         
