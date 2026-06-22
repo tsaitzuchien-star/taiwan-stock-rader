@@ -7,7 +7,6 @@ import json
 import os
 import hashlib
 from datetime import datetime
-import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from bs4 import BeautifulSoup
@@ -20,7 +19,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.9.7 | 戰術全開版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.9.7 | 鉅亨網直連版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統
@@ -103,11 +102,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 4. 側邊欄：開發日誌 (按鈕已移出)
+# 4. 側邊欄：開發日誌
 # ==========================================
 with st.sidebar:
     st.markdown("### 👨‍💻 戰情室開發日誌")
-    st.markdown("- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股) + UI 按鈕前置優化\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化\n- **V10.9:** 巔峰度假退場機制")
+    st.markdown("- **V10.9.7 (Ultra):** 棄用 Yahoo，改切換【鉅亨網 (Anue) 直連引擎】，完美防禦 IP 封鎖！\n- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股) + UI 按鈕前置優化\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測\n- **V10.9.4:** 雜訊淨化")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -139,7 +138,6 @@ def get_real_time_stock_list():
         pass
     
     if not stock_dict:
-        # 備用清單
         return ['1513', '2301', '2317', '2330', '2454', '2483', '2603', '3290', '6620'], {'1513':'中興電', '2301':'光寶科', '2317':'鴻海', '2330':'台積電', '2454':'聯發科', '2483':'百容', '2603':'長榮', '3290':'東浦', '6620':'漢達'}, set(['1513', '2301', '2317', '2330', '2454', '2483', '2603', '3290'])
     return sorted(list(stock_dict.keys())), stock_dict, twse_set
 
@@ -157,7 +155,7 @@ if pure_stocks:
 # ==========================================
 title_col, btn_col = st.columns([4, 1])
 with title_col:
-    st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.7</span> <span style='font-size: 0.5em; color: #8b92a5;'>(戰術全開版)</span></h1>", unsafe_allow_html=True)
+    st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.7</span> <span style='font-size: 0.5em; color: #8b92a5;'>(鉅亨網直連版)</span></h1>", unsafe_allow_html=True)
 with btn_col:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🔄 重啟情報網 (清除快取)", use_container_width=True):
@@ -174,12 +172,48 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.9.7 情報容忍度解鎖", delta="作戰效率最佳化", delta_color="normal")
+rc3.metric("🚦 系統狀態", "已切換至 鉅亨網(Anue) 伺服器", delta="免疫 Yahoo 封鎖", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. 情報工具箱 (包含 V10.9.4 軍用濾網)
+# 7. 情報工具箱 
 # ==========================================
+# 🌟 【核心武器】鉅亨網 (Anue) K線引擎，完美取代 Yahoo！
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_cnyes_history(stock_id):
+    """連線至鉅亨網伺服器，抓取歷史 K 線，完美繞過 Yahoo 防火牆"""
+    try:
+        now = int(time.time())
+        start_time = now - (120 * 86400) # 抓取過去約 120 天，確保能算季線
+        
+        # 鉅亨網統一使用 TWS:代號 來查詢上市與上櫃股票
+        url = f"https://ws.cnyes.com/charting/api/v1/history?resolution=D&symbol=TWS:{stock_id}&from={start_time}&to={now}"
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://invest.cnyes.com/"
+        }
+        
+        res = requests.get(url, headers=headers, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            if data.get('statusCode') == 'ok':
+                d = data['data']
+                df = pd.DataFrame({
+                    'Open': d['o'],
+                    'High': d['h'],
+                    'Low': d['l'],
+                    'Close': d['c'],
+                    'Volume': d['v'] # 鉅亨網預設回傳單位也是股數，與 yfinance 完美相容
+                })
+                # 將 timestamp 轉成 pandas 日期，設定為 index
+                df['Date'] = pd.to_datetime(d['t'], unit='s')
+                df.set_index('Date', inplace=True)
+                return df
+    except Exception as e:
+        pass
+    return pd.DataFrame()
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ptt_shoeshine_index(stock_name):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
@@ -317,14 +351,6 @@ def check_cmoney_blind_spot(stock_id, target_name):
         return has_blind_spot, msg, sample_comments
     except Exception as e:
         return False, f"🟡 測謊異常 ({str(e)})，跳過此驗證。", []
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_kline_data(stock_id, is_otc):
-    yf_ticker = f"{stock_id}.TWO" if is_otc else f"{stock_id}.TW"
-    try:
-        return yf.Ticker(yf_ticker).history(period="6mo")
-    except:
-        return pd.DataFrame()
 
 def add_liquidity_filter(df, volume_col='Volume', threshold=500):
     df = df.sort_index(ascending=True) 
@@ -596,7 +622,7 @@ with tab1:
         
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # V10.9.7 經典的 yf.Ticker 逐檔掃描引擎
+    # 🌟 【鉅亨網直連版掃描引擎】完美取代 yfinance 且維持 V10.9.7 邏輯
     def execute_radar_scan(batch_name, stock_list, twse_set, names_dict):
         if "全市場總掃描" in batch_name:
             target_stocks = stock_list
@@ -617,16 +643,12 @@ with tab1:
             remaining_stocks = len(target_stocks) - (i + 1)
             eta_seconds = int(remaining_stocks * avg_time_per_stock)
             
-            status_text.text(f"🧬 數據解析中... 標的: {stock_id} ({i+1}/{len(target_stocks)}) | ⏳ 預估剩餘時間: {eta_seconds} 秒")
-            yf_ticker = f"{stock_id}.TWO" if (stock_id not in twse_set and twse_set) else f"{stock_id}.TW"
+            status_text.text(f"🧬 鉅亨網直連解析中... 標的: {stock_id} ({i+1}/{len(target_stocks)}) | ⏳ 預估剩餘: {eta_seconds} 秒")
             
             try:
-                time.sleep(random.uniform(0.01, 0.05)) # V10.9.7 的經典激進潛入速度
-                df_history = yf.Ticker(yf_ticker).history(period="4mo")
-                
-                if df_history.empty and twse_set:
-                    yf_ticker = f"{stock_id}.TW" if yf_ticker.endswith(".TWO") else f"{stock_id}.TWO"
-                    df_history = yf.Ticker(yf_ticker).history(period="4mo")
+                # 調用鉅亨網的自定義 API，完全避開 Yahoo 的防線
+                df_history = get_cnyes_history(stock_id)
+                time.sleep(random.uniform(0.01, 0.05)) # 鉅亨網極度寬容，可以維持快節奏
                 
                 if not df_history.empty and len(df_history) >= 60:
                     latest = df_history.iloc[-1]
@@ -714,10 +736,10 @@ with tab1:
     if "master_df" in st.session_state:
         df_market = st.session_state.master_df
         
-        # 🛡️ 為了讓您順利重溫 V10.9.7，我偷偷加上了防崩潰攔截器，避免遇到全空資料時引發 KeyError 閃退
+        # 🛡️ 防崩潰攔截器
         if df_market is None or df_market.empty or '現價(元)' not in df_market.columns:
             st.error("🚨 戰情室警報：雷達掃描未獲取有效數據！(資料表為空)")
-            st.warning("👉 系統防禦啟動：Yahoo 伺服器暫時阻擋連線，若要繼續執行 V10.9.7 引擎，請點擊重啟情報網。")
+            st.warning("👉 系統防禦啟動：請點擊主畫面右上角「🔄 重啟情報網」重試。")
             st.stop()
 
         def apply_mask_and_style(df, cfg, ptt_tol):
@@ -733,7 +755,7 @@ with tab1:
             if cfg['gap']:
                 mask = mask & (df['跳空缺口(%)'] >= 2.0)
             if cfg['wash']:
-                mask = mask & (df['_is_washout'] == True)
+                mask = mask & (df['落底洗盤'] == True)
             
             res_df = df[mask].drop(columns=['_is_fake', '_is_washout']).drop_duplicates(subset=['股票代號']).reset_index(drop=True)
             
@@ -841,8 +863,8 @@ with tab1:
                     st.error(f"⚖️ **🚨 資金拒絕授權：** 現價 {current_price:.2f} 元，買一張已超標 ({int(MAX_EXPOSURE):,} 元)！")
                 
                 with st.spinner(f"展開 K 線圖..."):
-                    is_otc = False if not twse_set else (selected_id not in twse_set)
-                    df_chart = get_kline_data(selected_id, is_otc)
+                    # 同步更換為鉅亨網引擎
+                    df_chart = get_cnyes_history(selected_id)
                     
                     if not df_chart.empty: 
                         processed_df, passed_filter, current_ma5, current_ma20 = add_liquidity_filter(df_chart, volume_col='Volume', threshold=500)
@@ -898,8 +920,8 @@ with tab2:
                 st.markdown("</div>", unsafe_allow_html=True)
                 
                 with st.spinner(f"展開 {target_name} K 線圖..."):
-                    is_otc = False if not twse_set else (target_code not in twse_set)
-                    df_chart = get_kline_data(target_code, is_otc)
+                    # 同步更換為鉅亨網引擎
+                    df_chart = get_cnyes_history(target_code)
                     
                     if not df_chart.empty:
                         current_price = df_chart.iloc[-1]['Close']
@@ -945,7 +967,7 @@ with tab3:
         fee_discount = st.number_input("📉 手續費折數", min_value=0.1, max_value=1.0, value=1.0, step=0.1, help="例如6折=0.6，無折扣=1.0", key="fee_discount")
     with col_emp5:
         st.markdown("<br>", unsafe_allow_html=True) 
-        interview_btn = st.button("⚖️ 啟 মাতৃ防禦約談", use_container_width=True, key="emp_btn_tab3")
+        interview_btn = st.button("⚖️ 啟動防禦約談", use_container_width=True, key="emp_btn_tab3")
     st.markdown("</div>", unsafe_allow_html=True)
 
     if interview_btn and emp_code:
@@ -955,8 +977,8 @@ with tab3:
             st.markdown(f"<h2>🩺 【{emp_code} {emp_name}】 股災防禦健康檢查報告</h2>", unsafe_allow_html=True)
             
             with st.spinner("🤖 AI 總裁正在調閱履歷並計算真實稅費..."):
-                is_otc = False if not twse_set else (emp_code not in twse_set)
-                df_chart = get_kline_data(emp_code, is_otc)
+                # 同步更換為鉅亨網引擎
+                df_chart = get_cnyes_history(emp_code)
                 
                 heat_index = get_ptt_shoeshine_index(emp_name)
                 
