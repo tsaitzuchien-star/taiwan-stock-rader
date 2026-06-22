@@ -103,17 +103,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 4. 側邊欄：開發日誌與重啟按鈕 (V10.9.7 佈局)
+# 4. 側邊欄：開發日誌 (按鈕已移出)
 # ==========================================
 with st.sidebar:
     st.markdown("### 👨‍💻 戰情室開發日誌")
-    st.markdown("- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股)\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化\n- **V10.9:** 巔峰度假退場機制")
-    st.markdown("---")
-    if st.button("🔄 重啟情報網 (清除快取)", use_container_width=True):
-        st.cache_data.clear()
-        st.success("✅ 快取已清除，情報網重置成功！")
-        time.sleep(1)
-        st.rerun()
+    st.markdown("- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股) + UI 按鈕前置優化\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化\n- **V10.9:** 巔峰度假退場機制")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -159,9 +153,18 @@ if pure_stocks:
     batch_options.append("隨機游擊隊 (全市場隨機抽 140 檔)")
 
 # ==========================================
-# 6. 主標題與國庫風控面板 
+# 6. 主標題、全域控制鍵與國庫風控面板 
 # ==========================================
-st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.7</span> <span style='font-size: 0.5em; color: #8b92a5;'>(戰術全開版)</span></h1>", unsafe_allow_html=True)
+title_col, btn_col = st.columns([4, 1])
+with title_col:
+    st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.7</span> <span style='font-size: 0.5em; color: #8b92a5;'>(戰術全開版)</span></h1>", unsafe_allow_html=True)
+with btn_col:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🔄 重啟情報網 (清除快取)", use_container_width=True):
+        st.cache_data.clear()
+        st.success("✅ 快取已清除，情報網重置成功！")
+        time.sleep(1)
+        st.rerun()
 
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
@@ -942,7 +945,7 @@ with tab3:
         fee_discount = st.number_input("📉 手續費折數", min_value=0.1, max_value=1.0, value=1.0, step=0.1, help="例如6折=0.6，無折扣=1.0", key="fee_discount")
     with col_emp5:
         st.markdown("<br>", unsafe_allow_html=True) 
-        interview_btn = st.button("⚖️ 啟動防禦約談", use_container_width=True, key="emp_btn_tab3")
+        interview_btn = st.button("⚖️ 啟 মাতৃ防禦約談", use_container_width=True, key="emp_btn_tab3")
     st.markdown("</div>", unsafe_allow_html=True)
 
     if interview_btn and emp_code:
