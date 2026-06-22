@@ -107,7 +107,7 @@ st.markdown("""
 # ==========================================
 with st.sidebar:
     st.markdown("### 👨‍💻 戰情室開發日誌")
-    st.markdown("- **V10.9.8:** 移除側邊欄，重啟按鈕移至主畫面\n- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股)\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化\n- **V10.9:** 巔峰度假退場機制")
+    st.markdown("- **V10.9.8:** 官方 OpenAPI 直連，完美防封鎖 + 退場機制\n- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股)\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測(抓百容跌停錯殺股)\n- **V10.9.4:** 情報排他與UI雜訊淨化")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -174,7 +174,7 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.9.8 情報網按鈕前置", delta="作戰效率最佳化", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.9.8 情報網連線優化", delta="作戰效率最佳化", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
@@ -595,7 +595,33 @@ with tab1:
         
     st.markdown("</div>", unsafe_allow_html=True)
 
+    # 🛡️ V10.9.8 最新：官方 OpenAPI 閃電突襲防封鎖掃描引擎
     def execute_radar_scan(batch_name, stock_list, twse_set, names_dict):
+        status_text = st.empty()
+        status_text.text("📡 正在發動特務直連證交所與櫃買中心國庫總庫...")
+        
+        twse_market = {}
+        try:
+            res = requests.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", timeout=8)
+            if res.status_code == 200:
+                for r in res.json():
+                    code = r.get('Code', '')
+                    if len(code) == 4:
+                        twse_market[code] = r
+        except:
+            pass
+
+        tpex_market = {}
+        try:
+            res = requests.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes", timeout=8)
+            if res.status_code == 200:
+                for r in res.json():
+                    code = r.get('SecuritiesCompanyCode', '')
+                    if len(code) == 4:
+                        tpex_market[code] = r
+        except:
+            pass
+
         if "全市場總掃描" in batch_name:
             target_stocks = stock_list
         elif "隨機" in batch_name:
@@ -606,37 +632,47 @@ with tab1:
             
         data_list = []
         progress_bar = st.progress(0)
-        status_text = st.empty()
-        start_time = time.time()
         
         for i, stock_id in enumerate(target_stocks):
-            elapsed_time = time.time() - start_time
-            avg_time_per_stock = elapsed_time / (i + 1) if i > 0 else 0.5
-            remaining_stocks = len(target_stocks) - (i + 1)
-            eta_seconds = int(remaining_stocks * avg_time_per_stock)
+            progress_bar.progress((i + 1) / len(target_stocks))
             
-            status_text.text(f"🧬 數據解析中... 標的: {stock_id} ({i+1}/{len(target_stocks)}) | ⏳ 預估剩餘時間: {eta_seconds} 秒")
-            yf_ticker = f"{stock_id}.TWO" if (stock_id not in twse_set and twse_set) else f"{stock_id}.TW"
-            
+            raw_data = twse_market.get(stock_id) if stock_id in twse_set else tpex_market.get(stock_id)
+            if not raw_data:
+                continue
+                
             try:
-                # 🛡️ 戰術升級：加長隨機延遲，模擬真人，降低被 Yahoo 封鎖機率
-                time.sleep(random.uniform(0.5, 1.2)) 
+                if stock_id in twse_set:
+                    close_p = float(raw_data.get('ClosingPrice', 0).replace(',', '')) if raw_data.get('ClosingPrice') else 0
+                    open_p = float(raw_data.get('OpeningPrice', 0).replace(',', '')) if raw_data.get('OpeningPrice') else 0
+                    high_p = float(raw_data.get('HighestPrice', 0).replace(',', '')) if raw_data.get('HighestPrice') else 0
+                    low_p = float(raw_data.get('LowestPrice', 0).replace(',', '')) if raw_data.get('LowestPrice') else 0
+                    today_vol = float(raw_data.get('TradeVolume', 0).replace(',', '')) / 1000 if raw_data.get('TradeVolume') else 0
+                    change_val = float(raw_data.get('Change', 0).replace(',', '')) if raw_data.get('Change') else 0
+                else:
+                    close_p = float(raw_data.get('ClosePrice', 0))
+                    open_p = float(raw_data.get('OpenPrice', 0))
+                    high_p = float(raw_data.get('HighPrice', 0))
+                    low_p = float(raw_data.get('LowPrice', 0))
+                    today_vol = float(raw_data.get('TradingVolume', 0)) / 1000
+                    change_val = float(raw_data.get('UpAndDown', 0))
+
+                if close_p == 0 or open_p == 0:
+                    continue
+
+                yesterday_close = close_p - change_val
+                change_pct = round((change_val / yesterday_close) * 100, 2) if yesterday_close > 0 else 0
+                amplitude = round(((high_p - low_p) / yesterday_close) * 100, 2) if yesterday_close > 0 else 0
+                
+                if today_vol < 100 or close_p > 300: 
+                    continue
+
+                status_text.text(f"🧬 發現潛力動能股 {stock_id}，正在精密測繪技術指標...")
+                time.sleep(random.uniform(0.3, 0.6)) 
+                
+                yf_ticker = f"{stock_id}.TWO" if stock_id not in twse_set else f"{stock_id}.TW"
                 df_history = yf.Ticker(yf_ticker).history(period="4mo")
                 
-                if df_history.empty and twse_set:
-                    yf_ticker = f"{stock_id}.TW" if yf_ticker.endswith(".TWO") else f"{stock_id}.TWO"
-                    df_history = yf.Ticker(yf_ticker).history(period="4mo")
-                
                 if not df_history.empty and len(df_history) >= 60:
-                    latest = df_history.iloc[-1]
-                    yesterday = df_history.iloc[-2]
-                    
-                    open_p = latest['Open']
-                    close_p = latest['Close']
-                    high_p = latest['High']
-                    low_p = latest['Low']
-                    today_vol = latest['Volume'] / 1000
-                    
                     vol5 = df_history['Volume'].tail(5).mean() / 1000
                     vol20 = df_history['Volume'].tail(20).mean() / 1000
                     ma20 = df_history['Close'].tail(20).mean()
@@ -645,19 +681,13 @@ with tab1:
                     
                     bandwidth = (((ma20 + 2*std20) - (ma20 - 2*std20)) / ma20) * 100 if ma20 > 0 else 999
                     ma_diff = (abs(ma20 - ma60) / ma60) * 100 if ma60 > 0 else 999
-                    gap_up_pct = ((open_p - yesterday['Close']) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
+                    gap_up_pct = ((open_p - yesterday_close) / yesterday_close) * 100 if yesterday_close > 0 else 0
                     is_fake = (high_p - max(open_p, close_p)) > abs(close_p - open_p)
                     
-                    amplitude = ((high_p - low_p) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
-                    
-                    is_panic_washed = False
-                    if (amplitude >= 12.0) and (today_vol >= vol5 * 2.5) and (close_p >= (ma60 * 0.95)) and (close_p <= (ma60 * 1.06)):
-                        is_panic_washed = True
-                        
+                    is_panic_washed = (amplitude >= 12.0) and (today_vol >= vol5 * 2.5) and (close_p >= (ma60 * 0.95)) and (close_p <= (ma60 * 1.06))
                     range_hl = high_p - low_p
                     power_val = ((close_p - open_p) / range_hl) * today_vol if range_hl > 0 else 0.0
-                    
-                    body_pct = ((close_p - open_p) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
+                    body_pct = ((close_p - open_p) / yesterday_close) * 100 if yesterday_close > 0 else 0
                     upper_shadow = high_p - max(close_p, open_p)
                     is_growth_candle = (body_pct >= 3.0) and (today_vol > vol5) and (upper_shadow <= range_hl * 0.25)
                     
@@ -665,8 +695,8 @@ with tab1:
                         '股票代號': stock_id,
                         '股票名稱': names_dict.get(stock_id, "未知"),
                         '現價(元)': close_p, 
-                        '今日漲跌(%)': round(((close_p - yesterday['Close'])/yesterday['Close'])*100, 2),
-                        '日內振幅(%)': round(amplitude, 2),
+                        '今日漲跌(%)': change_pct,
+                        '日內振幅(%)': amplitude,
                         '五日均量(張)': round(vol5, 0),
                         '月均量(20日)': round(vol20, 0),
                         '今日成交(張)': round(today_vol, 0),
@@ -684,8 +714,6 @@ with tab1:
             except:
                 pass
                 
-            progress_bar.progress((i + 1) / len(target_stocks))
-            
         status_text.empty()
         progress_bar.empty()
         return pd.DataFrame(data_list)
@@ -716,9 +744,9 @@ with tab1:
         # ================= [🛡️ 戰情室防禦裝甲 (攔截空資料與格式異常)] =================
         if df_market is None or df_market.empty or '現價(元)' not in df_market.columns:
             st.error("🚨 戰情室警報：雷達掃描未獲取有效數據！(資料表為空)")
-            st.warning("👉 原因研判：Yahoo Finance 金融數據源暫時阻擋連線或回傳空值，導致本次部隊掃描抓不到任何符合格式的 K 線資料。")
-            st.info("💡 解決方案：這不是您的程式寫錯！請點擊右上角「🔄 重啟情報網 (清除快取)」重置連線，等待幾分鐘後再試。")
-            st.stop() # 強制終止，完美保護下方所有的 UI 與運算邏輯不崩潰！
+            st.warning("👉 原因研判：目標伺服器暫時阻擋連線或回傳空值，導致本次部隊掃描抓不到符合格式的資料。")
+            st.info("💡 解決方案：請點擊右上角「🔄 重啟情報網 (清除快取)」重置連線，等待幾分鐘後再試。")
+            st.stop()
         # ==============================================================================
 
         def apply_mask_and_style(df, cfg, ptt_tol):
