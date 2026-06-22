@@ -611,7 +611,7 @@ with tab1:
         
         for i, stock_id in enumerate(target_stocks):
             elapsed_time = time.time() - start_time
-            avg_time_per_stock = elapsed_time / (i + 1) if i > 0 else 0.05
+            avg_time_per_stock = elapsed_time / (i + 1) if i > 0 else 0.5
             remaining_stocks = len(target_stocks) - (i + 1)
             eta_seconds = int(remaining_stocks * avg_time_per_stock)
             
@@ -619,7 +619,8 @@ with tab1:
             yf_ticker = f"{stock_id}.TWO" if (stock_id not in twse_set and twse_set) else f"{stock_id}.TW"
             
             try:
-                time.sleep(random.uniform(0.01, 0.05))
+                # 🛡️ 戰術升級：加長隨機延遲，模擬真人，降低被 Yahoo 封鎖機率
+                time.sleep(random.uniform(0.5, 1.2)) 
                 df_history = yf.Ticker(yf_ticker).history(period="4mo")
                 
                 if df_history.empty and twse_set:
@@ -716,7 +717,7 @@ with tab1:
         if df_market is None or df_market.empty or '現價(元)' not in df_market.columns:
             st.error("🚨 戰情室警報：雷達掃描未獲取有效數據！(資料表為空)")
             st.warning("👉 原因研判：Yahoo Finance 金融數據源暫時阻擋連線或回傳空值，導致本次部隊掃描抓不到任何符合格式的 K 線資料。")
-            st.info("💡 解決方案：這不是您的程式寫錯！請點擊右上角「🔄 重啟情報網 (清除快取)」重置連線，或換一個掃描部隊重試。")
+            st.info("💡 解決方案：這不是您的程式寫錯！請點擊右上角「🔄 重啟情報網 (清除快取)」重置連線，等待幾分鐘後再試。")
             st.stop() # 強制終止，完美保護下方所有的 UI 與運算邏輯不崩潰！
         # ==============================================================================
 
@@ -1101,7 +1102,7 @@ with tab3:
                             <div class='hold-alert'>
                             <h3 style='color: #26a69a; margin-top: 0;'>✅ 裁決：防禦深厚，持續聘用！</h3>
                             <p><b>分析報告：</b> 成本夠低，就算跌停也遠高於成本與季線，無庸置疑的好員工。</p>
-                            <p><b>執行動作：</b> 抱緊處理，準備開心去玩！</p>
+                            <p><b>執行動作：</b> 抱緊處理，準備開心去福岡玩！</p>
                             </div>
                             """, unsafe_allow_html=True)
                         
