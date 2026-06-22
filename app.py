@@ -7,6 +7,7 @@ import json
 import os
 import hashlib
 from datetime import datetime
+import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from bs4 import BeautifulSoup
@@ -19,7 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.9.7 | 鉅亨網直連版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V10.9.7 | 批次穿透版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統
@@ -106,7 +107,7 @@ st.markdown("""
 # ==========================================
 with st.sidebar:
     st.markdown("### 👨‍💻 戰情室開發日誌")
-    st.markdown("- **V10.9.7 (Ultra):** 棄用 Yahoo，改切換【鉅亨網 (Anue) 直連引擎】，完美防禦 IP 封鎖！\n- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股) + UI 按鈕前置優化\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測\n- **V10.9.4:** 雜訊淨化")
+    st.markdown("- **V10.9.7 (批次穿透):** 切換為 Yahoo 批次下載通道，突破封鎖且維持原版戰術引擎\n- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股) + UI 按鈕前置優化\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測\n- **V10.9.4:** 雜訊淨化")
 
 # ==========================================
 # 5. 戰略底層：政府直連
@@ -138,13 +139,14 @@ def get_real_time_stock_list():
         pass
     
     if not stock_dict:
+        # 備用清單
         return ['1513', '2301', '2317', '2330', '2454', '2483', '2603', '3290', '6620'], {'1513':'中興電', '2301':'光寶科', '2317':'鴻海', '2330':'台積電', '2454':'聯發科', '2483':'百容', '2603':'長榮', '3290':'東浦', '6620':'漢達'}, set(['1513', '2301', '2317', '2330', '2454', '2483', '2603', '3290'])
     return sorted(list(stock_dict.keys())), stock_dict, twse_set
 
 pure_stocks, stock_names_dict, twse_set = get_real_time_stock_list()
 
 BATCH_SIZE = 140
-batch_options = ["🌟 全市場總掃描 (約需 3~5 分鐘，建議使用)"]
+batch_options = ["🌟 全市場總掃描 (批次下載極速版)"]
 if pure_stocks:
     for i in range(0, len(pure_stocks), BATCH_SIZE):
         batch_options.append(f"第 {i//BATCH_SIZE + 1} 部隊 (排序 {i+1}~{min(i + BATCH_SIZE, len(pure_stocks))})")
@@ -155,7 +157,7 @@ if pure_stocks:
 # ==========================================
 title_col, btn_col = st.columns([4, 1])
 with title_col:
-    st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.7</span> <span style='font-size: 0.5em; color: #8b92a5;'>(鉅亨網直連版)</span></h1>", unsafe_allow_html=True)
+    st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.7</span> <span style='font-size: 0.5em; color: #8b92a5;'>(批次穿透版)</span></h1>", unsafe_allow_html=True)
 with btn_col:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🔄 重啟情報網 (清除快取)", use_container_width=True):
@@ -172,48 +174,12 @@ MAX_RISK_PCT = 0.05
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "已切換至 鉅亨網(Anue) 伺服器", delta="免疫 Yahoo 封鎖", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V10.9.7 Yahoo 批次通道", delta="完美避開 403 封鎖", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. 情報工具箱 
+# 7. 情報工具箱 (包含 V10.9.4 軍用濾網)
 # ==========================================
-# 🌟 【核心武器】鉅亨網 (Anue) K線引擎，完美取代 Yahoo！
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_cnyes_history(stock_id):
-    """連線至鉅亨網伺服器，抓取歷史 K 線，完美繞過 Yahoo 防火牆"""
-    try:
-        now = int(time.time())
-        start_time = now - (120 * 86400) # 抓取過去約 120 天，確保能算季線
-        
-        # 鉅亨網統一使用 TWS:代號 來查詢上市與上櫃股票
-        url = f"https://ws.cnyes.com/charting/api/v1/history?resolution=D&symbol=TWS:{stock_id}&from={start_time}&to={now}"
-        
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://invest.cnyes.com/"
-        }
-        
-        res = requests.get(url, headers=headers, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            if data.get('statusCode') == 'ok':
-                d = data['data']
-                df = pd.DataFrame({
-                    'Open': d['o'],
-                    'High': d['h'],
-                    'Low': d['l'],
-                    'Close': d['c'],
-                    'Volume': d['v'] # 鉅亨網預設回傳單位也是股數，與 yfinance 完美相容
-                })
-                # 將 timestamp 轉成 pandas 日期，設定為 index
-                df['Date'] = pd.to_datetime(d['t'], unit='s')
-                df.set_index('Date', inplace=True)
-                return df
-    except Exception as e:
-        pass
-    return pd.DataFrame()
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_ptt_shoeshine_index(stock_name):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
@@ -352,14 +318,26 @@ def check_cmoney_blind_spot(stock_id, target_name):
     except Exception as e:
         return False, f"🟡 測謊異常 ({str(e)})，跳過此驗證。", []
 
+# 🌟 單點探測也切換為 yf.download 避免 Ticker 被阻擋
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_kline_data(stock_id, is_otc):
+    yf_ticker = f"{stock_id}.TWO" if is_otc else f"{stock_id}.TW"
+    try:
+        df = yf.download(yf_ticker, period="6mo", progress=False)
+        if not df.empty:
+            return df.dropna()
+    except:
+        pass
+    return pd.DataFrame()
+
 def add_liquidity_filter(df, volume_col='Volume', threshold=500):
     df = df.sort_index(ascending=True) 
     df['MA5_Volume'] = (df[volume_col] / 1000).rolling(window=5).mean()
     df['MA20_Volume'] = (df[volume_col] / 1000).rolling(window=20).mean()
     
     if len(df['MA5_Volume'].dropna()) > 0 and len(df['MA20_Volume'].dropna()) > 0:
-        latest_ma5_vol = df['MA5_Volume'].iloc[-1]
-        latest_ma20_vol = df['MA20_Volume'].iloc[-1]
+        latest_ma5_vol = float(df['MA5_Volume'].iloc[-1])
+        latest_ma20_vol = float(df['MA20_Volume'].iloc[-1])
     else:
         latest_ma5_vol = 0
         latest_ma20_vol = 0
@@ -377,6 +355,10 @@ def draw_plotly_chart(df_chart, stock_name):
     
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.7, 0.3])
     
+    # 處理可能的多重索引 (如果是從 yf.download 來的單檔資料，可以直接讀)
+    if isinstance(df_chart.columns, pd.MultiIndex):
+        df_chart.columns = df_chart.columns.droplevel(1)
+        
     fig.add_trace(go.Candlestick(
         x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], 
         low=df_chart['Low'], close=df_chart['Close'], name='K線', 
@@ -389,7 +371,7 @@ def draw_plotly_chart(df_chart, stock_name):
     fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['Upper'], line=dict(color='#FFD700', width=1, dash='dot'), name='布林上軌'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['Lower'], line=dict(color='#FFD700', width=1, dash='dot'), name='布林下軌'), row=1, col=1)
     
-    colors = ['#ef5350' if row['Close'] >= row['Open'] else '#26a69a' for _, row in df_chart.iterrows()]
+    colors = ['#ef5350' if float(row['Close']) >= float(row['Open']) else '#26a69a' for _, row in df_chart.iterrows()]
     fig.add_trace(go.Bar(x=df_chart.index, y=df_chart['Volume']/1000, marker_color=colors, name='成交量(張)'), row=2, col=1)
     
     fig.update_layout(
@@ -408,18 +390,21 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
     with st.spinner("🤖 AI 正在發動特務潛入各大論壇進行深度交叉比對與留言提取..."):
         time.sleep(1.5) 
         
+        if isinstance(df_chart.columns, pd.MultiIndex):
+            df_chart.columns = df_chart.columns.droplevel(1)
+            
         latest = df_chart.iloc[-1]
-        yesterday_close = df_chart.iloc[-2]['Close'] if len(df_chart) > 1 else latest['Close']
+        yesterday_close = float(df_chart.iloc[-2]['Close']) if len(df_chart) > 1 else float(latest['Close'])
         
-        ma20 = df_chart['MA20'].iloc[-1] if 'MA20' in df_chart else latest['Close']
-        ma60 = df_chart['MA60'].iloc[-1] if 'MA60' in df_chart else latest['Close']
-        vol5_mean = (df_chart['Volume']/1000).tail(5).mean()
+        ma20 = float(df_chart['MA20'].iloc[-1]) if 'MA20' in df_chart else float(latest['Close'])
+        ma60 = float(df_chart['MA60'].iloc[-1]) if 'MA60' in df_chart else float(latest['Close'])
+        vol5_mean = float(df_chart['Volume'].tail(5).mean() / 1000)
         
-        open_p = latest['Open']
-        close_p = latest['Close']
-        high_p = latest['High']
-        low_p = latest['Low']
-        today_vol = latest['Volume'] / 1000
+        open_p = float(latest['Open'])
+        close_p = float(latest['Close'])
+        high_p = float(latest['High'])
+        low_p = float(latest['Low'])
+        today_vol = float(latest['Volume']) / 1000
         
         range_hl = high_p - low_p
         power_val = ((close_p - open_p) / range_hl) * today_vol if range_hl > 0 else 0.0
@@ -430,7 +415,7 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
         
         tech_score = 60 
         tech_exp = "🔹 基礎底分：60分<br>"
-        if latest['Close'] > ma20: 
+        if close_p > ma20: 
             tech_score += 15
             tech_exp += "✅ 現價站上月線 (+15)<br>"
         else:
@@ -442,7 +427,7 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
         else:
             tech_exp += "❌ 均線尚未多頭 (+0)<br>"
             
-        if latest['Volume']/1000 > vol5_mean: 
+        if today_vol > vol5_mean: 
             tech_score += 10
             tech_exp += "✅ 今日出量攻擊 (+10)<br>"
         else:
@@ -622,7 +607,7 @@ with tab1:
         
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # 🌟 【鉅亨網直連版掃描引擎】完美取代 yfinance 且維持 V10.9.7 邏輯
+    # 🌟 V10.9.7 完美外殼 + Yahoo Batch Download 引擎
     def execute_radar_scan(batch_name, stock_list, twse_set, names_dict):
         if "全市場總掃描" in batch_name:
             target_stocks = stock_list
@@ -635,79 +620,106 @@ with tab1:
         data_list = []
         progress_bar = st.progress(0)
         status_text = st.empty()
-        start_time = time.time()
         
-        for i, stock_id in enumerate(target_stocks):
-            elapsed_time = time.time() - start_time
-            avg_time_per_stock = elapsed_time / (i + 1) if i > 0 else 0.05
-            remaining_stocks = len(target_stocks) - (i + 1)
-            eta_seconds = int(remaining_stocks * avg_time_per_stock)
-            
-            status_text.text(f"🧬 鉅亨網直連解析中... 標的: {stock_id} ({i+1}/{len(target_stocks)}) | ⏳ 預估剩餘: {eta_seconds} 秒")
+        # 將目標清單以 140 檔為一包進行批次打包
+        chunk_size = 140
+        chunks = [target_stocks[i:i + chunk_size] for i in range(0, len(target_stocks), chunk_size)]
+        
+        for chunk_idx, chunk in enumerate(chunks):
+            status_text.text(f"🚀 發動批次突圍：正在透過 Yahoo 隱蔽通道打包下載 (第 {chunk_idx+1}/{len(chunks)} 批次)...")
+            yf_tickers = [f"{sid}.TWO" if (sid not in twse_set and twse_set) else f"{sid}.TW" for sid in chunk]
             
             try:
-                # 調用鉅亨網的自定義 API，完全避開 Yahoo 的防線
-                df_history = get_cnyes_history(stock_id)
-                time.sleep(random.uniform(0.01, 0.05)) # 鉅亨網極度寬容，可以維持快節奏
+                # 關鍵防護：一次下載整批歷史資料，絕對不會被 Yahoo 視為惡意機器人
+                df_bulk = yf.download(yf_tickers, period="4mo", progress=False, threads=True)
                 
-                if not df_history.empty and len(df_history) >= 60:
-                    latest = df_history.iloc[-1]
-                    yesterday = df_history.iloc[-2]
+                if df_bulk.empty:
+                    continue
                     
-                    open_p = latest['Open']
-                    close_p = latest['Close']
-                    high_p = latest['High']
-                    low_p = latest['Low']
-                    today_vol = latest['Volume'] / 1000
+                for i, stock_id in enumerate(chunk):
+                    yf_ticker = yf_tickers[i]
+                    df_history = pd.DataFrame()
                     
-                    vol5 = df_history['Volume'].tail(5).mean() / 1000
-                    vol20 = df_history['Volume'].tail(20).mean() / 1000
-                    ma20 = df_history['Close'].tail(20).mean()
-                    ma60 = df_history['Close'].tail(60).mean()
-                    std20 = df_history['Close'].tail(20).std()
-                    
-                    bandwidth = (((ma20 + 2*std20) - (ma20 - 2*std20)) / ma20) * 100 if ma20 > 0 else 999
-                    ma_diff = (abs(ma20 - ma60) / ma60) * 100 if ma60 > 0 else 999
-                    gap_up_pct = ((open_p - yesterday['Close']) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
-                    is_fake = (high_p - max(open_p, close_p)) > abs(close_p - open_p)
-                    
-                    amplitude = ((high_p - low_p) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
-                    
-                    is_panic_washed = False
-                    if (amplitude >= 12.0) and (today_vol >= vol5 * 2.5) and (close_p >= (ma60 * 0.95)) and (close_p <= (ma60 * 1.06)):
-                        is_panic_washed = True
-                        
-                    range_hl = high_p - low_p
-                    power_val = ((close_p - open_p) / range_hl) * today_vol if range_hl > 0 else 0.0
-                    
-                    body_pct = ((close_p - open_p) / yesterday['Close']) * 100 if yesterday['Close'] > 0 else 0
-                    upper_shadow = high_p - max(close_p, open_p)
-                    is_growth_candle = (body_pct >= 3.0) and (today_vol > vol5) and (upper_shadow <= range_hl * 0.25)
-                    
-                    data_list.append({
-                        '股票代號': stock_id,
-                        '股票名稱': names_dict.get(stock_id, "未知"),
-                        '現價(元)': close_p, 
-                        '今日漲跌(%)': round(((close_p - yesterday['Close'])/yesterday['Close'])*100, 2),
-                        '日內振幅(%)': round(amplitude, 2),
-                        '五日均量(張)': round(vol5, 0),
-                        '月均量(20日)': round(vol20, 0),
-                        '今日成交(張)': round(today_vol, 0),
-                        '月量爆發倍數': round(today_vol / vol20, 1) if vol20 > 0 else 0,
-                        '多空力道': round(power_val, 1),
-                        '成長K線': '🌟 確立' if is_growth_candle else '-',
-                        '跳空缺口(%)': round(gap_up_pct, 2),
-                        '布林帶寬(%)': round(bandwidth, 2),
-                        '均線糾結(%)': round(ma_diff, 2),
-                        '季線位置': round(ma60, 2),
-                        '強力洗盘訊號': '🚨 觸發' if is_panic_washed else '-',
-                        '_is_fake': is_fake,
-                        '_is_washout': is_panic_washed
-                    })
+                    try:
+                        # 處理批次下載後的多重索引資料結構
+                        if isinstance(df_bulk.columns, pd.MultiIndex):
+                            if yf_ticker in df_bulk.columns.get_level_values(1):
+                                df_history = pd.DataFrame({
+                                    'Open': df_bulk['Open'][yf_ticker],
+                                    'High': df_bulk['High'][yf_ticker],
+                                    'Low': df_bulk['Low'][yf_ticker],
+                                    'Close': df_bulk['Close'][yf_ticker],
+                                    'Volume': df_bulk['Volume'][yf_ticker]
+                                }).dropna()
+                        else:
+                            if len(yf_tickers) == 1 and 'Close' in df_bulk.columns:
+                                df_history = df_bulk.dropna()
+                                
+                        # 完整保留 V10.9.7 嚴格的 60 日均線計算邏輯
+                        if not df_history.empty and len(df_history) >= 60:
+                            latest = df_history.iloc[-1]
+                            yesterday = df_history.iloc[-2]
+                            
+                            open_p = float(latest['Open'])
+                            close_p = float(latest['Close'])
+                            high_p = float(latest['High'])
+                            low_p = float(latest['Low'])
+                            today_vol = float(latest['Volume']) / 1000
+                            
+                            yesterday_close = float(yesterday['Close'])
+                            if yesterday_close == 0: continue
+                            
+                            vol5 = float(df_history['Volume'].tail(5).mean() / 1000)
+                            vol20 = float(df_history['Volume'].tail(20).mean() / 1000)
+                            ma20 = float(df_history['Close'].tail(20).mean())
+                            ma60 = float(df_history['Close'].tail(60).mean())
+                            std20 = float(df_history['Close'].tail(20).std())
+                            
+                            bandwidth = (((ma20 + 2*std20) - (ma20 - 2*std20)) / ma20) * 100 if ma20 > 0 else 999
+                            ma_diff = (abs(ma20 - ma60) / ma60) * 100 if ma60 > 0 else 999
+                            gap_up_pct = ((open_p - yesterday_close) / yesterday_close) * 100 if yesterday_close > 0 else 0
+                            is_fake = (high_p - max(open_p, close_p)) > abs(close_p - open_p)
+                            
+                            amplitude = ((high_p - low_p) / yesterday_close) * 100 if yesterday_close > 0 else 0
+                            
+                            is_panic_washed = False
+                            if (amplitude >= 12.0) and (today_vol >= vol5 * 2.5) and (close_p >= (ma60 * 0.95)) and (close_p <= (ma60 * 1.06)):
+                                is_panic_washed = True
+                                
+                            range_hl = high_p - low_p
+                            power_val = ((close_p - open_p) / range_hl) * today_vol if range_hl > 0 else 0.0
+                            
+                            body_pct = ((close_p - open_p) / yesterday_close) * 100 if yesterday_close > 0 else 0
+                            upper_shadow = high_p - max(close_p, open_p)
+                            is_growth_candle = (body_pct >= 3.0) and (today_vol > vol5) and (upper_shadow <= range_hl * 0.25)
+                            
+                            data_list.append({
+                                '股票代號': stock_id,
+                                '股票名稱': names_dict.get(stock_id, "未知"),
+                                '現價(元)': close_p, 
+                                '今日漲跌(%)': round(((close_p - yesterday_close)/yesterday_close)*100, 2),
+                                '日內振幅(%)': round(amplitude, 2),
+                                '五日均量(張)': round(vol5, 0),
+                                '月均量(20日)': round(vol20, 0),
+                                '今日成交(張)': round(today_vol, 0),
+                                '月量爆發倍數': round(today_vol / vol20, 1) if vol20 > 0 else 0,
+                                '多空力道': round(power_val, 1),
+                                '成長K線': '🌟 確立' if is_growth_candle else '-',
+                                '跳空缺口(%)': round(gap_up_pct, 2),
+                                '布林帶寬(%)': round(bandwidth, 2),
+                                '均線糾結(%)': round(ma_diff, 2),
+                                '季線位置': round(ma60, 2),
+                                '強力洗盘訊號': '🚨 觸發' if is_panic_washed else '-',
+                                '_is_fake': is_fake,
+                                '_is_washout': is_panic_washed
+                            })
+                    except:
+                        pass
             except:
                 pass
-                
-            progress_bar.progress((i + 1) / len(target_stocks))
+            
+            progress_bar.progress((chunk_idx + 1) / len(chunks))
+            time.sleep(random.uniform(0.1, 0.3))
             
         status_text.empty()
         progress_bar.empty()
@@ -724,7 +736,7 @@ with tab1:
             st.rerun()
 
     if shower_mode_btn:
-        with st.spinner(f"🛁 洗澡模式啟動！正在進行全市場總掃描，約需 10 分鐘..."):
+        with st.spinner(f"🛁 洗澡模式啟動！正在進行全市場總掃描，約需 1 分鐘..."):
             df_result = execute_radar_scan("🌟 全市場總掃描 (約需 3~5 分鐘，建議使用)", pure_stocks, twse_set, stock_names_dict)
             st.session_state.master_df = df_result
             st.session_state.master_batch = "🌟 全市場總掃描 (約需 3~5 分鐘，建議使用)"
@@ -739,7 +751,7 @@ with tab1:
         # 🛡️ 防崩潰攔截器
         if df_market is None or df_market.empty or '現價(元)' not in df_market.columns:
             st.error("🚨 戰情室警報：雷達掃描未獲取有效數據！(資料表為空)")
-            st.warning("👉 系統防禦啟動：請點擊主畫面右上角「🔄 重啟情報網」重試。")
+            st.warning("👉 系統防禦啟動：所有標的皆未通過 60 日均線門檻，或網路暫時不穩。請點擊主畫面右上角「🔄 重啟情報網」重新突擊。")
             st.stop()
 
         def apply_mask_and_style(df, cfg, ptt_tol):
@@ -755,7 +767,7 @@ with tab1:
             if cfg['gap']:
                 mask = mask & (df['跳空缺口(%)'] >= 2.0)
             if cfg['wash']:
-                mask = mask & (df['落底洗盤'] == True)
+                mask = mask & (df['_is_washout'] == True)
             
             res_df = df[mask].drop(columns=['_is_fake', '_is_washout']).drop_duplicates(subset=['股票代號']).reset_index(drop=True)
             
@@ -863,8 +875,8 @@ with tab1:
                     st.error(f"⚖️ **🚨 資金拒絕授權：** 現價 {current_price:.2f} 元，買一張已超標 ({int(MAX_EXPOSURE):,} 元)！")
                 
                 with st.spinner(f"展開 K 線圖..."):
-                    # 同步更換為鉅亨網引擎
-                    df_chart = get_cnyes_history(selected_id)
+                    is_otc = False if not twse_set else (selected_id not in twse_set)
+                    df_chart = get_kline_data(selected_id, is_otc)
                     
                     if not df_chart.empty: 
                         processed_df, passed_filter, current_ma5, current_ma20 = add_liquidity_filter(df_chart, volume_col='Volume', threshold=500)
@@ -920,11 +932,11 @@ with tab2:
                 st.markdown("</div>", unsafe_allow_html=True)
                 
                 with st.spinner(f"展開 {target_name} K 線圖..."):
-                    # 同步更換為鉅亨網引擎
-                    df_chart = get_cnyes_history(target_code)
+                    is_otc = False if not twse_set else (target_code not in twse_set)
+                    df_chart = get_kline_data(target_code, is_otc)
                     
                     if not df_chart.empty:
-                        current_price = df_chart.iloc[-1]['Close']
+                        current_price = float(df_chart.iloc[-1]['Close'])
                         max_buyable_lots = int(MAX_EXPOSURE // (current_price * 1000))
                         
                         if max_buyable_lots >= 1: 
@@ -977,17 +989,17 @@ with tab3:
             st.markdown(f"<h2>🩺 【{emp_code} {emp_name}】 股災防禦健康檢查報告</h2>", unsafe_allow_html=True)
             
             with st.spinner("🤖 AI 總裁正在調閱履歷並計算真實稅費..."):
-                # 同步更換為鉅亨網引擎
-                df_chart = get_cnyes_history(emp_code)
+                is_otc = False if not twse_set else (emp_code not in twse_set)
+                df_chart = get_kline_data(emp_code, is_otc)
                 
                 heat_index = get_ptt_shoeshine_index(emp_name)
                 
                 if not df_chart.empty:
                     df_chart['MA10'] = df_chart['Close'].rolling(10).mean()
-                    current_price = df_chart.iloc[-1]['Close']
-                    ma10 = df_chart['MA10'].iloc[-1]
-                    ma20 = df_chart['Close'].rolling(20).mean().iloc[-1]
-                    ma60 = df_chart['Close'].rolling(60).mean().iloc[-1]
+                    current_price = float(df_chart.iloc[-1]['Close'])
+                    ma10 = float(df_chart['MA10'].iloc[-1])
+                    ma20 = float(df_chart['Close'].rolling(20).mean().iloc[-1])
+                    ma60 = float(df_chart['Close'].rolling(60).mean().iloc[-1])
                     
                     bias_ratio = ((current_price - ma60) / ma60) * 100 if ma60 > 0 else 0
                     
