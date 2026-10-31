@@ -232,3 +232,15 @@ def test_config_problems(tmp_path):
     cfg = YuantaConfig(account="123", password="", sdk_dir=str(tmp_path))
     msgs = " ".join(cfg.problems())
     assert "S + 11 碼" in msgs and "password" in msgs and "YuantaSparkAPI.dll" in msgs and "YSendOrder.py" in msgs
+
+
+def test_no_connection_means_no_login(monkeypatch, tmp_path):
+    monkeypatch.setattr("radar.yuanta.client.time.sleep", lambda s: None)
+    monkeypatch.setattr("radar.yuanta.client.CONNECT_TIMEOUT", 0.2)
+    t = FakeTrader()
+    t.Open = lambda env: t.calls.append(("Open", env))  # 主機沒回應
+    c, _ = make_client(trader=t, log_dir=str(tmp_path))
+    with pytest.raises(YuantaError, match="沒有連上元大主機"):
+        c.connect()
+    assert not any(x[0] == "Login" for x in t.calls)
+    assert c.events_seen == 0 and not c.logged_in
