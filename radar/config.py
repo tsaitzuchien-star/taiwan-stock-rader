@@ -20,6 +20,8 @@ class Settings:
     total_capital: int = 1_170_000
     max_risk_pct: float = 0.05
     extra: dict = field(default_factory=dict)
+    # config.local.toml 的 [yuanta] 區段（帳號、密碼只存在使用者自己的電腦）
+    yuanta: dict = field(default_factory=dict)
 
     @property
     def max_exposure(self) -> float:
@@ -38,4 +40,5 @@ def load_settings(path: Path | None = None) -> Settings:
                 setattr(s, key, Path(value) if isinstance(current, Path) else value)
             else:
                 s.extra[key] = value
+        s.yuanta = dict(data.get("yuanta", {}))
     return s

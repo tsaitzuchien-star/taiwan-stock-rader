@@ -104,3 +104,15 @@ def compute_metrics(bars: pd.DataFrame, names: dict[str, str],
     if wanted is not None:
         missing += sorted(wanted - seen)
     return pd.DataFrame(rows, columns=COLUMNS), missing
+
+
+def merge_intraday(bars: pd.DataFrame, today_bars: pd.DataFrame) -> pd.DataFrame:
+    """把盤中即時報價做成的「今天」K 棒接在資料庫歷史後面（同日期以即時資料為準）。"""
+    if today_bars is None or today_bars.empty:
+        return bars
+    if bars.empty:
+        return today_bars.copy()
+    day = today_bars['date'].iloc[0]
+    keep = bars[~((bars['date'] == day) & bars['code'].isin(today_bars['code']))]
+    out = pd.concat([keep, today_bars[bars.columns]], ignore_index=True)
+    return out.sort_values(['code', 'date'], kind='stable').reset_index(drop=True)

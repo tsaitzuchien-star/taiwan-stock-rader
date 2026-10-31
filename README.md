@@ -14,12 +14,27 @@
 把 `config.example.toml` 複製成 `config.local.toml` 再修改（總資金、單檔曝險比例等）。
 `config.local.toml`、金鑰、憑證都在 `.gitignore` 裡，不會上傳 GitHub。
 
+## 元大 Spark API（第四艙、盤中模式）
+
+本程式只「查詢」元大資料：庫存、未實現 / 已實現損益、即時報價。**沒有任何下單功能。**
+
+1. 安裝 [.NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（Windows x64，元大元件需要）。
+2. 確認元大憑證已安裝在這台電腦（元大「憑證e總管」/ YuantaServiSign 完成憑證下載即可）。
+3. 在 `config.local.toml` 加入 `[yuanta]` 區段（格式見 `config.example.toml`）：帳號、電子密碼、`sdk_dir`（放 `YuantaSparkAPI.dll` 的資料夾）。
+4. 雙擊 **`測試元大連線.bat`**：會登入並列出庫存與 2330 報價，確認連線正常。
+5. 啟動雷達後到「💼 第四艙」按「連線登入元大」。登入後第一艙可勾選「⚡ 盤中模式」，用元大即時報價當作今天的 K 棒做全市場掃描。
+
+程式內建元大安控限制（同功能每秒 ≤3 次、K 線每秒 1 次、訂閱 ≤1900 檔、報價表每批 500 檔），
+收到「使用限制」通知會自動停手，避免被停權。
+
 ## 專案結構
 
 | 路徑 | 用途 |
 | --- | --- |
-| `app.py` | Streamlit 介面（三個艙） |
-| `radar/collectors/` | 外部資料來源：TWSE、TPEx（之後加元大 Spark API） |
+| `app.py` | Streamlit 介面（四個艙） |
+| `radar/collectors/` | 外部資料來源：TWSE、TPEx 官方盤後資料 |
+| `radar/yuanta/` | 元大 Spark API 唯讀用戶端（`python -m radar.yuanta.check` 連線測試） |
+| `radar/ui_yuanta.py` | 第四艙介面、盤中模式 |
 | `radar/storage.py` | SQLite 本地資料庫 |
 | `radar/collect.py` | 盤後批次收集器（`python -m radar.collect`） |
 | `radar/indicators.py` | 雷達指標計算 |

@@ -3,7 +3,7 @@ chcp 65001 >nul
 cd /d "%~dp0"
 if not exist .venv (
   python -m venv .venv
-  .venv\Scripts\python -m pip install -r requirements.txt
 )
+.venv\Scripts\python -m pip install -q --disable-pip-version-check -r requirements.txt
 .venv\Scripts\python -m radar.collect
 pause
