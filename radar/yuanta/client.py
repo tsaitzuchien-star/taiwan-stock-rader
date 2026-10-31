@@ -63,7 +63,16 @@ class YuantaConfig:
 
     @classmethod
     def from_dict(cls, d: dict) -> "YuantaConfig":
-        known = {k: str(v) for k, v in d.items() if k in cls.__dataclass_fields__}
+        known = {}
+        for k, v in d.items():
+            if k not in cls.__dataclass_fields__:
+                continue
+            v = str(v)
+            if k in ("sdk_dir", "cert_path", "log_dir"):
+                v = v.strip().strip("\"'").strip()   # 貼路徑時常多帶空白或引號
+            elif k in ("account", "environment"):
+                v = v.strip()
+            known[k] = v
         return cls(**known)
 
     def problems(self) -> list[str]:
