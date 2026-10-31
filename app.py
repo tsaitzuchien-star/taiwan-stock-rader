@@ -11,12 +11,21 @@ import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from bs4 import BeautifulSoup
-import urllib3
 import re
 import concurrent.futures
 
-# 🛡️ 投資長指令：強制關閉 SSL 不安全連線警告
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from radar.config import load_settings
+from radar.storage import Store
+from radar.indicators import compute_metrics, to_ohlcv
+from radar import collect as radar_collect
+
+SETTINGS = load_settings()
+
+@st.cache_resource(show_spinner=False)
+def get_store():
+    return Store(SETTINGS.db_path)
+
+store = get_store()
 
 # ==========================================
 # 1. 頁面與環境設定
@@ -113,8 +122,19 @@ with st.sidebar:
 # ==========================================
 # 5. 戰略底層：政府直連 (🚨 關鍵修復：加入偽裝與多重重試)
 # ==========================================
+def get_stock_list_from_db():
+    df = store.stocks()
+    if df.empty:
+        return None
+    names = dict(zip(df['code'], df['name']))
+    twse = set(df.loc[df['market'] == 'TWSE', 'code'])
+    return sorted(names), names, twse
+
 @st.cache_data(ttl=43200, show_spinner=False)
 def get_real_time_stock_list():
+    from_db = get_stock_list_from_db()
+    if from_db:
+        return from_db
     stock_dict = {}
     twse_set = set()
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
@@ -141,7 +161,7 @@ def get_real_time_stock_list():
         success = False
         for _ in range(2):
             try:
-                res_tpex = requests.get(url, headers=headers, verify=False, timeout=10)
+                res_tpex = requests.get(url, headers=headers, timeout=10)
                 if res_tpex.status_code == 200:
                     for item in res_tpex.json():
                         code = str(item.get('SecuritiesCompanyCode', ''))
@@ -201,13 +221,43 @@ with btn_col:
 st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
 st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
 rc1, rc2, rc3 = st.columns(3)
-TOTAL_CAPITAL = 1170000
-MAX_RISK_PCT = 0.05 
+TOTAL_CAPITAL = SETTINGS.total_capital
+MAX_RISK_PCT = SETTINGS.max_risk_pct
 MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
 rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
 rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V10.9.7 雙重並行引擎", delta=f"鎖定全市場 {len(pure_stocks)} 檔", delta_color="normal")
+rc3.metric("🚦 系統狀態", "V11 本地資料庫引擎", delta=f"鎖定全市場 {len(pure_stocks)} 檔", delta_color="normal")
 st.markdown("</div>", unsafe_allow_html=True)
+
+# ==========================================
+# 6.5 本地資料庫狀態（TWSE / TPEx 官方盤後資料）
+# ==========================================
+db_health = store.health()
+with st.expander(
+    f"📦 本地資料庫：最新 {db_health['latest_date'] or '尚無資料'} ｜ "
+    f"{db_health['trading_days']} 個交易日 ｜ 最新一日 {db_health['stocks_on_latest']} 檔",
+    expanded=db_health['latest_date'] is None,
+):
+    if db_health['latest_date'] is None:
+        st.warning("資料庫是空的。請按下方按鈕建立（第一次約 5～10 分鐘，之後每天只要幾秒）。"
+                   "建好之前，雷達會暫時改用舊的 Yahoo 下載方式。")
+    st.caption("資料來源：證交所、櫃買中心官方每日收盤行情。建議每個交易日 14:30 後更新一次。")
+    if st.button("⬇️ 更新資料庫", key="btn_update_db"):
+        bar = st.progress(0.0)
+        msg = st.empty()
+        def _progress(text, frac):
+            msg.text(text)
+            bar.progress(min(max(frac, 0.0), 1.0))
+        report = radar_collect.update(store, SETTINGS, progress=_progress)
+        st.cache_data.clear()
+        if report.errors:
+            st.error("部分日期下載失敗：\n" + "\n".join(report.errors[:10]))
+        st.success("✅ " + report.summary())
+        time.sleep(1)
+        st.rerun()
+    if not db_health['errors'].empty:
+        st.markdown("**最近的下載錯誤**")
+        st.dataframe(db_health['errors'], use_container_width=True)
 
 # ==========================================
 # 7. 情報工具箱 (包含 V10.9.4 軍用濾網)
@@ -242,7 +292,7 @@ def check_cmoney_blind_spot(stock_id, target_name):
         major_stocks.remove(target_name)
     
     try:
-        res = requests.get(url, headers=headers, timeout=5, verify=False)
+        res = requests.get(url, headers=headers, timeout=5)
         if res.status_code != 200:
             return False, f"🟡 網頁連線受阻 (HTTP {res.status_code})，跳過測謊。", []
         
@@ -315,6 +365,9 @@ def check_cmoney_blind_spot(stock_id, target_name):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_kline_data(stock_id, is_otc):
+    db_bars = store.bars([stock_id])
+    if len(db_bars) >= 60:
+        return to_ohlcv(db_bars).astype(float)
     yf_ticker = f"{stock_id}.TWO" if is_otc else f"{stock_id}.TW"
     try:
         session = requests.Session()
@@ -608,7 +661,25 @@ with tab1:
     st.markdown("</div>", unsafe_allow_html=True)
 
     # 🚀 終極雙擎掃描邏輯 (Yahoo 萬能拆解器 + 鉅亨網多線程補位)
+    def resolve_batch(batch_name, stock_list):
+        if "全市場總掃描" in batch_name:
+            return stock_list
+        if "隨機" in batch_name:
+            return random.sample(stock_list, min(140, len(stock_list)))
+        idx = batch_options.index(batch_name) - 1
+        return stock_list[idx*BATCH_SIZE : (idx+1)*BATCH_SIZE]
+
     def execute_radar_scan(batch_name, stock_list, twse_set, names_dict):
+        """V11：直接讀本地資料庫計算，資料庫是空的才退回舊的 Yahoo 下載。"""
+        if store.health()['latest_date'] is None:
+            return execute_radar_scan_legacy(batch_name, stock_list, twse_set, names_dict)
+        target_stocks = resolve_batch(batch_name, stock_list)
+        bars = store.bars(target_stocks)
+        df, missing = compute_metrics(bars, names_dict, target_stocks)
+        st.session_state.scan_missing = missing
+        return df
+
+    def execute_radar_scan_legacy(batch_name, stock_list, twse_set, names_dict):
         if "全市場總掃描" in batch_name:
             target_stocks = stock_list
         elif "隨機" in batch_name:
@@ -748,7 +819,7 @@ with tab1:
             st.rerun()
 
     if shower_mode_btn:
-        with st.spinner(f"🛁 洗澡模式啟動！正在進行全市場總掃描，約需 1 分鐘..."):
+        with st.spinner(f"🛁 洗澡模式啟動！正在進行全市場總掃描，讀取本地資料庫中..."):
             df_result = execute_radar_scan("🌟 全市場總掃描 (批次下載極速版)", pure_stocks, twse_set, stock_names_dict)
             st.session_state.master_df = df_result
             st.session_state.master_batch = "🌟 全市場總掃描 (批次下載極速版)"
@@ -766,6 +837,12 @@ with tab1:
             st.warning("👉 原因研判：可能您的「股價上限」與「活水底線」設定太嚴格，導致沒有任何股票通過初篩，或是 Yahoo 連線出現不穩。")
             st.info("💡 解決方案：嘗試放寬條件，或點擊右上角「🔄 重啟情報網」重試。")
             st.stop()
+
+        missing = st.session_state.get("scan_missing") or []
+        st.caption(f"📊 本次計算 {len(df_market)} 檔；{len(missing)} 檔因最新一日無成交或資料不足 60 天而略過。")
+        if missing:
+            with st.expander("查看略過的股票代號"):
+                st.write("、".join(missing))
 
         def apply_mask_and_style(df, cfg, ptt_tol):
             mask = (df['現價(元)'] <= cfg['p']) & (df['今日成交(張)'] >= cfg['tv']) & \
