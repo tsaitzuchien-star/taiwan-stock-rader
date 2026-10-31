@@ -37,6 +37,9 @@ SNAPSHOT_BATCH = 500
 MAX_SUBSCRIPTIONS = 1900
 LOGIN_RETRY_GAP = 5.0
 SUSPEND_SECONDS = 65
+# 元大元件資料夾裡一定要有的檔案（YuantaSparkAPI.dll 依賴其他 dll，不能單獨複製）
+SDK_REQUIRED_FILES = ("YuantaSparkAPI.dll", "YuantaSparkAPI.deps.json", "NX_Login_Model.dll",
+                      "Nexus.TCBus.StandardModel.dll", "NX_PositionPortfolio_Model.dll")
 
 # OnResponse 的 dwIndex（intMark=1 時）錯誤代碼
 QUERY_ERRORS = {3: "尚未登入", 4: "登入帳號錯誤", 5: "功能代碼錯誤或權限不足",
@@ -87,8 +90,10 @@ class YuantaConfig:
             out.append("environment 只能是 PROD 或 UAT")
         if not self.sdk_dir:
             out.append("config.local.toml 的 [yuanta] 沒有填 sdk_dir（YuantaSparkAPI.dll 所在資料夾）")
-        elif not (Path(self.sdk_dir) / "YuantaSparkAPI.dll").exists():
-            out.append(f"在 {self.sdk_dir} 找不到 YuantaSparkAPI.dll")
+        elif missing_sdk_files(self.sdk_dir):
+            out.append(f"{self.sdk_dir} 不是完整的元大元件資料夾，缺少 "
+                       f"{'、'.join(missing_sdk_files(self.sdk_dir))}"
+                       "（請指到放元大範例程式 YSendOrder.py 的資料夾）")
         return out
 
 
@@ -96,8 +101,10 @@ class YuantaConfig:
 def load_sdk(sdk_dir: str | Path) -> SimpleNamespace:
     """依元大官方說明載入 .NET 8 與 YuantaSparkAPI.dll，回傳需要用到的型別。"""
     sdk_dir = Path(sdk_dir).resolve()
-    if not (sdk_dir / "YuantaSparkAPI.dll").exists():
-        raise YuantaError(f"在 {sdk_dir} 找不到 YuantaSparkAPI.dll")
+    missing = missing_sdk_files(sdk_dir)
+    if missing:
+        raise YuantaError(f"{sdk_dir} 不是完整的元大元件資料夾，缺少：{'、'.join(missing)}。"
+                          "請把 sdk_dir 指到放元大範例程式 YSendOrder.py 的那個資料夾")
     if sys.platform == "win32":
         os.add_dll_directory(str(sdk_dir))
     if str(sdk_dir) not in sys.path:
@@ -128,24 +135,48 @@ def load_sdk(sdk_dir: str | Path) -> SimpleNamespace:
 
     import clr  # type: ignore
     clr.AddReference("System.Collections")
+    dll = sdk_dir / "YuantaSparkAPI.dll"
     try:
-        clr.AddReference("YuantaSparkAPI")
+        asm = clr.AddReference(str(dll))  # 用完整路徑，確保載入的是這個資料夾的元件
     except Exception as e:  # noqa: BLE001
-        raise YuantaError(f"載入 YuantaSparkAPI.dll 失敗：{e}") from e
+        raise YuantaError(f"載入 {dll} 失敗：{e}") from e
 
     from System.Collections.Generic import List  # type: ignore
-    import YuantaOneAPI as Y  # type: ignore
+    try:
+        from YuantaOneAPI import (  # type: ignore
+            YuantaSparkAPITrader, OnResponseEventHandler, enumEnvironmentMode, enumLogType,
+            enumMarketType, WatchlistAll, Quote, KLineType)
+    except ImportError as e:
+        raise YuantaError("YuantaSparkAPI.dll 載入了，但讀不到裡面的功能。"
+                          + _type_load_problem(asm)) from e
     return SimpleNamespace(
         List=List,
-        Trader=Y.YuantaSparkAPITrader,
-        Handler=Y.OnResponseEventHandler,
-        Env=Y.enumEnvironmentMode,
-        LogType=Y.enumLogType,
-        Market=Y.enumMarketType,
-        WatchlistAll=Y.WatchlistAll,
-        Quote=Y.Quote,
-        KLineType=Y.KLineType,
+        Trader=YuantaSparkAPITrader,
+        Handler=OnResponseEventHandler,
+        Env=enumEnvironmentMode,
+        LogType=enumLogType,
+        Market=enumMarketType,
+        WatchlistAll=WatchlistAll,
+        Quote=Quote,
+        KLineType=KLineType,
     )
+
+
+def missing_sdk_files(sdk_dir: str | Path) -> list[str]:
+    """元大元件要整個資料夾一起用；只複製 YuantaSparkAPI.dll 會缺相依檔。"""
+    return [f for f in SDK_REQUIRED_FILES if not (Path(sdk_dir) / f).exists()]
+
+
+def _type_load_problem(asm) -> str:
+    """找出 .NET 讀不到型別的真正原因（通常是缺少相依的 dll）。"""
+    try:
+        asm.GetTypes()
+        return f"（元件位置：{asm.Location}）"
+    except Exception as e:  # noqa: BLE001
+        inner = getattr(e, "LoaderExceptions", None) or getattr(getattr(e, "InnerException", None),
+                                                                "LoaderExceptions", None)
+        msgs = sorted({str(x.Message) for x in inner if x is not None}) if inner else [str(e)]
+        return "原因：\n  " + "\n  ".join(msgs[:8])
 
 
 # ---------------------------------------------------------------- 速率限制
