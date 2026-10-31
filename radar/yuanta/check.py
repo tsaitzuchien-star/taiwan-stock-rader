@@ -58,6 +58,11 @@ def main(argv: list[str] | None = None) -> int:
     except YuantaError as e:
         print(f"\n❌ {e}")
         return 1
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        print(f"\n❌ 未預期的錯誤：{type(e).__name__}: {e}")
+        return 1
     finally:
         print("\n最近的元大訊息：")
         for m in list(client.messages)[-15:]:

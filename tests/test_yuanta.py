@@ -231,4 +231,4 @@ def test_rate_limiter_spaces_calls():
 def test_config_problems(tmp_path):
     cfg = YuantaConfig(account="123", password="", sdk_dir=str(tmp_path))
     msgs = " ".join(cfg.problems())
-    assert "S + 11 碼" in msgs and "password" in msgs and "YuantaSparkAPI.dll" in msgs
+    assert "S + 11 碼" in msgs and "password" in msgs and "YuantaSparkAPI.dll" in msgs and "YSendOrder.py" in msgs
