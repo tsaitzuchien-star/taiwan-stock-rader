@@ -6,4 +6,8 @@ if not exist .venv (
   python -m venv .venv
   .venv\Scripts\python -m pip install -r requirements.txt
 )
-.venv\Scripts\python -m streamlit run app.py
+if not exist "%USERPROFILE%\.streamlit\credentials.toml" (
+  mkdir "%USERPROFILE%\.streamlit" 2>nul
+  (echo [general]& echo email = "")> "%USERPROFILE%\.streamlit\credentials.toml"
+)
+.venv\Scripts\python -m streamlit run app.py --browser.gatherUsageStats false

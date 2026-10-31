@@ -30,7 +30,7 @@ store = get_store()
 # ==========================================
 # 1. 頁面與環境設定
 # ==========================================
-st.set_page_config(page_title="台股妖股雷達 V10.9.7 | 雙擎無敵版", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="台股妖股雷達 V11 | 本地資料庫版", layout="wide", page_icon="🏢")
 
 # ==========================================
 # 2. 戰情日誌與狀態記憶系統
@@ -117,7 +117,7 @@ st.markdown("""
 # ==========================================
 with st.sidebar:
     st.markdown("### 👨‍💻 戰情室開發日誌")
-    st.markdown("- **V10.9.7 (雙擎無敵):** 🚀 修復政府 API 阻擋，找回上櫃股！導入 Yahoo + 鉅亨網雙引擎，徹底免疫空資料！\n- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股) + UI 按鈕前置優化\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測")
+    st.markdown("- **V11 (本地資料庫):** 📦 改用證交所、櫃買中心官方盤後資料存入本地資料庫，全市場掃描秒級完成\n- **V10.9.7 (雙擎無敵):** 🚀 修復政府 API 阻擋，找回上櫃股！導入 Yahoo + 鉅亨網雙引擎，徹底免疫空資料！\n- **V10.9.7:** 情報容忍度解鎖(可找熱門飆股) + UI 按鈕前置優化\n- **V10.9.6:** 新增多空力道引擎與成長K線辨識\n- **V10.9.5:** 潛艦聲納探測")
 
 # ==========================================
 # 5. 戰略底層：政府直連 (🚨 關鍵修復：加入偽裝與多重重試)
@@ -198,7 +198,7 @@ def fetch_cnyes_single(stock_id):
     return stock_id, pd.DataFrame()
 
 BATCH_SIZE = 140
-batch_options = ["🌟 全市場總掃描 (約需 3~5 分鐘，建議使用)"]
+batch_options = ["🌟 全市場總掃描 (建議使用)"]
 if pure_stocks:
     for i in range(0, len(pure_stocks), BATCH_SIZE):
         batch_options.append(f"第 {i//BATCH_SIZE + 1} 部隊 (排序 {i+1}~{min(i + BATCH_SIZE, len(pure_stocks))})")
@@ -209,7 +209,7 @@ if pure_stocks:
 # ==========================================
 title_col, btn_col = st.columns([4, 1])
 with title_col:
-    st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V10.9.7</span> <span style='font-size: 0.5em; color: #8b92a5;'>(雙擎無敵版)</span></h1>", unsafe_allow_html=True)
+    st.markdown("<h1>🏢 台股妖股雷達 <span style='color: #FFD700;'>V11</span> <span style='font-size: 0.5em; color: #8b92a5;'>(本地資料庫版)</span></h1>", unsafe_allow_html=True)
 with btn_col:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🔄 重啟情報網 (清除快取)", use_container_width=True):
