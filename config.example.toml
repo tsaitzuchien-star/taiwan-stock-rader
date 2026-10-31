@@ -7,7 +7,13 @@ history_trading_days = 90    # 資料庫保留的交易日數
 request_interval_sec = 3.0   # 對官方網站請求的間隔秒數
 # db_path = "data/radar.db"
 
-# 元大 Spark API 設定（階段 3 才會用到）。帳號密碼只填在你自己的電腦上。
-# [yuanta]
-# account = "S0000000000"
-# password = ""
+# 元大 Spark API（第四艙、盤中模式）。帳號密碼只填在你自己的電腦上，不要傳給任何人。
+# 本程式只查詢庫存、損益、報價，沒有任何下單功能。
+[yuanta]
+account = ""                 # S + 分公司 4 碼 + 帳號 7 碼，例如 S981D0816864
+password = ""                # 電子密碼
+environment = "PROD"         # PROD 正式環境 / UAT 測試環境
+sdk_dir = 'C:\Users\User\TaiwanStockRadar'   # YuantaSparkAPI.dll 所在資料夾（單引號，路徑照貼）
+# 選填：若登入出現「憑證異常」，可改用 pfx 檔登入
+# cert_path = 'C:\Users\User\TaiwanStockRadar\Yuanta_CA.pfx'
+# cert_password = ""

@@ -18,6 +18,7 @@ from radar.config import load_settings
 from radar.storage import Store
 from radar.indicators import compute_metrics, to_ohlcv
 from radar import collect as radar_collect
+from radar import ui_yuanta
 
 SETTINGS = load_settings()
 
@@ -593,7 +594,7 @@ def render_interview_panel(stock_id, stock_name, current_price, heat_index, df_c
 # ==========================================
 # 8. 三艙切換系統 
 # ==========================================
-tab1, tab2, tab3 = st.tabs(["📡 第一艙：大範圍妖股雷達", "🎯 第二艙：自選股狙擊追蹤", "🚨 第三艙：在職員工緊急約談室"])
+tab1, tab2, tab3, tab4 = st.tabs(["📡 第一艙：大範圍妖股雷達", "🎯 第二艙：自選股狙擊追蹤", "🚨 第三艙：在職員工緊急約談室", "💼 第四艙：元大帳務與即時報價"])
 
 # ------------------------------------------
 # 第一艙：大範圍妖股雷達
@@ -637,6 +638,9 @@ with tab1:
         ],
         horizontal=True
     )
+    yuanta_ready = ui_yuanta.get_client(SETTINGS).logged_in
+    st.checkbox("⚡ 盤中模式：用元大即時報價當作今天的 K 棒（需先到第四艙登入元大）",
+                key="use_intraday", disabled=not yuanta_ready)
     st.markdown("<br>", unsafe_allow_html=True)
 
     col_batch, col_btn_run, col_btn_shower = st.columns([1.5, 1, 1.5])
@@ -675,6 +679,15 @@ with tab1:
             return execute_radar_scan_legacy(batch_name, stock_list, twse_set, names_dict)
         target_stocks = resolve_batch(batch_name, stock_list)
         bars = store.bars(target_stocks)
+        yuanta_client = ui_yuanta.get_client(SETTINGS)
+        if st.session_state.get("use_intraday") and yuanta_client.logged_in:
+            try:
+                bars, note = ui_yuanta.intraday_bars(yuanta_client, target_stocks, bars, twse_set)
+                st.session_state.intraday_note = note
+            except ui_yuanta.YuantaError as e:
+                st.session_state.intraday_note = f"⚠️ 元大即時報價失敗，改用盤後資料：{e}"
+        else:
+            st.session_state.pop("intraday_note", None)
         df, missing = compute_metrics(bars, names_dict, target_stocks)
         st.session_state.scan_missing = missing
         return df
@@ -838,6 +851,8 @@ with tab1:
             st.info("💡 解決方案：嘗試放寬條件，或點擊右上角「🔄 重啟情報網」重試。")
             st.stop()
 
+        if st.session_state.get("intraday_note"):
+            st.info(st.session_state.intraday_note)
         missing = st.session_state.get("scan_missing") or []
         st.caption(f"📊 本次計算 {len(df_market)} 檔；{len(missing)} 檔因最新一日無成交或資料不足 60 天而略過。")
         if missing:
@@ -1062,9 +1077,11 @@ with tab3:
     with col_emp1: 
         emp_code = st.text_input("📝 員工代號", placeholder="例如: 2301", key="emp_code_tab3")
     with col_emp2: 
-        emp_cost = st.number_input("💰 買進均價", min_value=0.1, value=234.7, step=0.1, key="emp_cost_tab3")
+        st.session_state.setdefault("emp_cost_tab3", 234.7)
+        emp_cost = st.number_input("💰 買進均價", min_value=0.1, step=0.1, key="emp_cost_tab3")
     with col_emp3: 
-        emp_shares = st.number_input("📦 買進股數", min_value=1, value=100, step=1, help="一張=1000", key="emp_shares_tab3")
+        st.session_state.setdefault("emp_shares_tab3", 100)
+        emp_shares = st.number_input("📦 買進股數", min_value=1, step=1, help="一張=1000", key="emp_shares_tab3")
     with col_emp4:
         fee_discount = st.number_input("📉 手續費折數", min_value=0.1, max_value=1.0, value=1.0, step=0.1, help="例如6折=0.6，無折扣=1.0", key="fee_discount")
     with col_emp5:
@@ -1233,3 +1250,9 @@ with tab3:
                     st.warning("⚠️ 無法取得 K 線資料，請確認代號是否正確。")
         else:
             st.error(f"❌ 查無此代號：{emp_code}")
+
+# ------------------------------------------
+# 第四艙：元大帳務與即時報價（唯讀，不下單）
+# ------------------------------------------
+with tab4:
+    ui_yuanta.render(SETTINGS, stock_names_dict, twse_set)
