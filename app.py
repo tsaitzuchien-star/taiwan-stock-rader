@@ -607,13 +607,13 @@ with tab1:
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        price_limit = st.slider("💰 股價掃描上限 (現價)", 10.0, 500.0, st.session_state.p_limit, step=1.0, key="p_limit")
+        price_limit = st.slider("💰 股價掃描上限 (現價)", 10.0, 500.0, step=1.0, key="p_limit")
     with col2:
-        vol_limit = st.slider("💧 邊緣人指數上限 (月均量)", 10, 5000, st.session_state.v_limit, step=10, key="v_limit") 
+        vol_limit = st.slider("💧 邊緣人指數上限 (月均量)", 10, 5000, step=10, key="v_limit") 
     with col3:
-        min_today_vol = st.slider("🛡️ 活水底線 (今日成交)", 100, 3000, st.session_state.tv_limit, step=50, key="tv_limit") 
+        min_today_vol = st.slider("🛡️ 活水底線 (今日成交)", 100, 3000, step=50, key="tv_limit") 
     with col4:
-        power_multiplier = st.slider("🔥 核彈級爆發 (倍數)", 1.5, 15.0, st.session_state.pm_limit, step=0.5, key="pm_limit")
+        power_multiplier = st.slider("🔥 核彈級爆發 (倍數)", 1.0, 15.0, step=0.1, key="pm_limit")
 
     st.markdown("<br>", unsafe_allow_html=True)
     
