@@ -1,0 +1,15 @@
+# 金鑰與帳密（絕對不要上傳）
+google_key.json
+config.local.toml
+.streamlit/secrets.toml
+*.pfx
+
+# 本機資料庫、日誌與暫存檔
+data/
+scan_log.json
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.DS_Store

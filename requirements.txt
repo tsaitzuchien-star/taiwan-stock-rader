@@ -1,8 +1,9 @@
-streamlit
-pandas
-requests
-yfinance
-plotly
-beautifulsoup4
-gspread
-matplotlib
+streamlit>=1.40,<2
+pandas>=2.2
+requests>=2.32
+yfinance>=0.2.50
+plotly>=5.24
+beautifulsoup4>=4.12
+gspread>=6.1
+matplotlib>=3.9
+pytest>=8.0
