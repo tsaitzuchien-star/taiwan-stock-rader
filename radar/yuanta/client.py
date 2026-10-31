@@ -36,6 +36,8 @@ SUBSCRIBE_BATCH = 200
 SNAPSHOT_BATCH = 500
 MAX_SUBSCRIPTIONS = 1900
 LOGIN_RETRY_GAP = 5.0
+CONNECT_TIMEOUT = 20
+DEFAULT_LOG_DIR = Path(__file__).resolve().parents[2] / "logs" / "yuanta"
 SUSPEND_SECONDS = 65
 # 元大元件資料夾裡一定要有的檔案（YuantaSparkAPI.dll 依賴其他 dll，不能單獨複製）
 SDK_REQUIRED_FILES = ("YuantaSparkAPI.dll", "YuantaSparkAPI.deps.json", "NX_Login_Model.dll",
@@ -62,13 +64,17 @@ class YuantaConfig:
     sdk_dir: str = ""                    # YuantaSparkAPI.dll 所在資料夾
     cert_path: str = ""                  # 選填：pfx 憑證路徑（Windows 預設用系統憑證存放區）
     cert_password: str = ""
-    log_dir: str = ""
+    log_dir: str = ""                    # 元大元件 log 存放處（預設：專案資料夾 logs/yuanta）
+    pmm_check: bool = True               # 元大 SetPMMServerCheck，連不上時可試著設成 false
 
     @classmethod
     def from_dict(cls, d: dict) -> "YuantaConfig":
         known = {}
         for k, v in d.items():
             if k not in cls.__dataclass_fields__:
+                continue
+            if k == "pmm_check":
+                known[k] = v if isinstance(v, bool) else str(v).strip().lower() not in ("false", "0", "no")
                 continue
             v = str(v)
             if k in ("sdk_dir", "cert_path", "log_dir"):
@@ -232,6 +238,9 @@ class YuantaClient:
         self.messages: deque[str] = deque(maxlen=200)
         self.reports: deque[str] = deque(maxlen=200)
         self.suspended_until = 0.0
+        self.events_seen = 0                    # 收到幾個元大事件（診斷用）
+        self._handler = None                    # 保留 .NET 委派的參考，避免被回收
+        self.log_dir: Path | None = None
         self._last_login_fail = 0.0
 
     # ---------- 事件 ----------
@@ -242,6 +251,7 @@ class YuantaClient:
     def on_response(self, intMark, dwIndex, strIndex, objHandle, objValue) -> None:  # noqa: N803
         """元大 OnResponse 事件（在 .NET 執行緒呼叫）。任何例外都要吃掉，不能讓元件掛掉。"""
         try:
+            self.events_seen += 1
             mark, idx, name = int(intMark), int(dwIndex), str(strIndex or "")
             if mark == 0:
                 self._on_system(idx, objValue)
@@ -353,14 +363,34 @@ class YuantaClient:
             if self._sdk is None:
                 self._sdk = load_sdk(self.config.sdk_dir)
             if self._api is None:
-                api = self._sdk.Trader(self.config.log_dir) if self.config.log_dir else self._sdk.Trader()
-                api.OnResponse += self._sdk.Handler(self.on_response)
+                log_dir = Path(self.config.log_dir) if self.config.log_dir else DEFAULT_LOG_DIR
+                log_dir.mkdir(parents=True, exist_ok=True)
+                self.log_dir = log_dir
+                api = self._sdk.Trader(str(log_dir))
+                self._handler = self._sdk.Handler(self.on_response)
+                api.OnResponse += self._handler
                 api.SetLogType(self._sdk.LogType.COMMON)
+                if not self.config.pmm_check:
+                    api.SetPMMServerCheck(False)
                 env = self._sdk.Env.UAT if self.config.environment.upper() == "UAT" else self._sdk.Env.PROD
                 self._api = api
+                self._note(f"開啟連線（{self.config.environment.upper()}）…")
                 api.Open(env)
-                if not self._connected.wait(10):
-                    self._note("10 秒內沒有收到「已連線」通知，仍嘗試登入")
+            if not self._connected.wait(CONNECT_TIMEOUT):
+                # 沒連上就不送登入：元大有「每日登入次數」限制，不要白白消耗
+                api, self._api = self._api, None
+                try:
+                    api.Close()
+                    api.Dispose()
+                except Exception:  # noqa: BLE001
+                    pass
+                raise YuantaError(
+                    f"{CONNECT_TIMEOUT} 秒內沒有連上元大主機（收到 {self.events_seen} 個元大事件），所以沒有送出登入。\n"
+                    "常見原因：\n"
+                    "  1. 元大主機在非服務時間（週末、深夜）維護，請在平日白天再試\n"
+                    "  2. 防毒軟體或防火牆擋住了連線\n"
+                    "  3. 元大憑證服務（YuantaServiSign）沒有在執行\n"
+                    f"元大元件的紀錄檔在：{self.log_dir}")
             gap = time.monotonic() - self._last_login_fail
             if gap < LOGIN_RETRY_GAP:
                 time.sleep(LOGIN_RETRY_GAP - gap)

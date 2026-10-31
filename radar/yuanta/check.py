@@ -18,6 +18,7 @@ UAT_ACCOUNT = ("S98875005091", "1234")  # 元大範例程式公開的測試帳�
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="元大 Spark API 連線測試（唯讀）")
     p.add_argument("--uat", action="store_true", help="用元大公開測試帳號連測試環境")
+    p.add_argument("--no-pmm", action="store_true", help="關閉元大 PMMServer 檢查（連不上時試用）")
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     try:
@@ -30,6 +31,8 @@ def main(argv: list[str] | None = None) -> int:
         cfg.account, cfg.password = UAT_ACCOUNT
         cfg.environment = "UAT"
         cfg.cert_path = cfg.cert_password = ""
+    if args.no_pmm:
+        cfg.pmm_check = False
     print(f"環境：{cfg.environment}　帳號：{cfg.account[:5] + '*' * 7 if cfg.account else '(未設定)'}")
     print(f"元大元件資料夾：{cfg.sdk_dir or '(未設定)'}")
     problems = cfg.problems()
@@ -64,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n❌ 未預期的錯誤：{type(e).__name__}: {e}")
         return 1
     finally:
-        print("\n最近的元大訊息：")
+        print(f"\n收到元大事件 {client.events_seen} 個；元件紀錄檔：{client.log_dir or '(未建立)'}")
+        print("最近的元大訊息：")
         for m in list(client.messages)[-15:]:
             print("   ", m)
         client.close()
