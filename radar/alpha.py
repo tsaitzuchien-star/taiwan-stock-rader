@@ -46,33 +46,53 @@ def _streak(values: list[float]) -> int:
     return n * sign
 
 
+def _from_end(df: pd.DataFrame) -> pd.Series:
+    """每檔股票由最新一筆往回數的序號（最新 = 0）；df 需已依 code、date 排序。"""
+    return df.groupby("code", sort=False).cumcount(ascending=False)
+
+
+def _streaks(df: pd.DataFrame, col: str) -> pd.Series:
+    """向量化版 _streak：每檔由最新一天往回連續同號（非 0）的天數，賣超為負。"""
+    sign = np.sign(df[col])
+    last = sign.groupby(df["code"], sort=False).transform("last")
+    rev = _from_end(df)
+    broken = (sign != last) | (sign == 0)
+    first_break = rev.where(broken).groupby(df["code"], sort=False).min()
+    size = df.groupby("code", sort=False).size()
+    n = first_break.reindex(size.index).fillna(size)
+    lastsign = sign.groupby(df["code"], sort=False).last()
+    return (n * lastsign).astype(int)
+
+
 def chip_table(inst: pd.DataFrame, margin: pd.DataFrame) -> pd.DataFrame:
     """每檔：外資 / 投信 / 自營 今日、5 日、20 日買賣超（張），連買天數，融資變化。"""
     out = pd.DataFrame()
     if not inst.empty:
-        inst = inst.sort_values(["code", "date"])
-        rows = []
-        for code, g in inst.groupby("code", sort=False):
-            f = (g["foreign_net"].fillna(0) / 1000).tolist()
-            t = (g["trust_net"].fillna(0) / 1000).tolist()
-            d = (g["dealer_net"].fillna(0) / 1000).tolist()
-            rows.append({
-                "code": code, "inst_date": g["date"].iloc[-1],
-                "f1": f[-1], "t1": t[-1], "d1": d[-1],
-                "f5": sum(f[-5:]), "t5": sum(t[-5:]), "d5": sum(d[-5:]),
-                "f20": sum(f[-20:]), "t20": sum(t[-20:]),
-                "f_streak": _streak(f), "t_streak": _streak(t),
-            })
-        out = pd.DataFrame(rows).set_index("code")
+        d = inst.sort_values(["code", "date"]).reset_index(drop=True)
+        d = pd.DataFrame({"code": d["code"], "date": d["date"],
+                          "f": d["foreign_net"].fillna(0) / 1000, "t": d["trust_net"].fillna(0) / 1000,
+                          "d": d["dealer_net"].fillna(0) / 1000})
+        rev = _from_end(d)
+        g = d.groupby("code", sort=False)
+        last = g.last()
+        s5 = d[rev < 5].groupby("code", sort=False)[["f", "t", "d"]].sum()
+        s20 = d[rev < 20].groupby("code", sort=False)[["f", "t"]].sum()
+        out = pd.DataFrame({
+            "inst_date": last["date"], "f1": last["f"], "t1": last["t"], "d1": last["d"],
+            "f5": s5["f"], "t5": s5["t"], "d5": s5["d"], "f20": s20["f"], "t20": s20["t"],
+            "f_streak": _streaks(d, "f"), "t_streak": _streaks(d, "t"),
+        })
+        out.index.name = "code"
     if not margin.empty:
-        margin = margin.sort_values(["code", "date"])
-        m = margin.groupby("code").agg(
-            margin_bal=("margin_bal", "last"), short_bal=("short_bal", "last"),
-            margin_5ago=("margin_bal", lambda s: s.iloc[-6] if len(s) >= 6 else s.iloc[0]))
-        m["margin_chg5"] = m["margin_bal"] - m["margin_5ago"]
-        m["margin_chg5_pct"] = np.where(m["margin_5ago"] > 0, m["margin_chg5"] / m["margin_5ago"] * 100, np.nan)
+        mg = margin.sort_values(["code", "date"]).reset_index(drop=True)
+        rev = _from_end(mg)
+        g = mg.groupby("code", sort=False)
+        m = pd.DataFrame({"margin_bal": g["margin_bal"].last(), "short_bal": g["short_bal"].last()})
+        ago = mg[rev == 5].set_index("code")["margin_bal"].reindex(m.index)
+        ago = ago.fillna(g["margin_bal"].first())
+        m["margin_chg5"] = m["margin_bal"] - ago
+        m["margin_chg5_pct"] = np.where(ago > 0, m["margin_chg5"] / ago * 100, np.nan)
         m["short_ratio"] = np.where(m["margin_bal"] > 0, m["short_bal"] / m["margin_bal"] * 100, np.nan)
-        m = m.drop(columns="margin_5ago")
         out = m if out.empty else out.join(m, how="outer")
     return out
 
@@ -80,14 +100,15 @@ def chip_table(inst: pd.DataFrame, margin: pd.DataFrame) -> pd.DataFrame:
 def returns_table(bars: pd.DataFrame) -> pd.DataFrame:
     if bars.empty:
         return pd.DataFrame()
-    rows = []
-    for code, g in bars.groupby("code", sort=False):
-        c = g["close"].dropna()
-        if len(c) < 21:
-            continue
-        rows.append({"code": code, "ret20": (c.iloc[-1] / c.iloc[-21] - 1) * 100,
-                     "ret60": (c.iloc[-1] / c.iloc[-61] - 1) * 100 if len(c) >= 61 else np.nan})
-    return pd.DataFrame(rows).set_index("code") if rows else pd.DataFrame()
+    b = bars[["code", "date", "close"]].dropna(subset=["close"]).sort_values(["code", "date"]).reset_index(drop=True)
+    rev = _from_end(b)
+    n = b.groupby("code", sort=False).size()
+    last = b[rev == 0].set_index("code")["close"]
+    c20 = b[rev == 20].set_index("code")["close"].reindex(last.index)
+    c60 = b[rev == 60].set_index("code")["close"].reindex(last.index)
+    out = pd.DataFrame({"ret20": (last / c20 - 1) * 100, "ret60": (last / c60 - 1) * 100})
+    out = out[n.reindex(out.index) >= 21]
+    return out if not out.empty else pd.DataFrame()
 
 
 def build(metrics: pd.DataFrame, bars: pd.DataFrame, inst: pd.DataFrame, margin: pd.DataFrame,
@@ -134,7 +155,8 @@ def build(metrics: pd.DataFrame, bars: pd.DataFrame, inst: pd.DataFrame, margin:
     df["s_value"] = (0.6 * pe_score + 0.4 * _pct(df["dy"])).where(df["pe"].notna() | df["dy"].notna(), 50.0)
     df["score"] = sum(df[f"s_{k}"] * w for k, w in WEIGHTS.items())
     df["liquid"] = df["vol20"] >= MIN_VOL20
-    df["tags"] = df.apply(_tags, axis=1)
+    tag_cols = ["f1", "t1", "f_streak", "t_streak", "yoy", "mom", "margin_chg5", "f5", "t5", "pe", "dy"]
+    df["tags"] = [_tags(r) for r in df[tag_cols].to_dict(orient="records")]
     df = df.reset_index().sort_values("score", ascending=False)
     df["rank"] = range(1, len(df) + 1)
     return df
