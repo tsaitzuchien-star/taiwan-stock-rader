@@ -36,7 +36,15 @@ class Http:
         self._last = time.monotonic()
 
     def get_json(self, url: str, params: dict | None = None, allow_insecure_fallback: bool = False):
-        """取得 JSON。allow_insecure_fallback 只用在公開行情資料（不送任何帳密），
+        return self._get(url, params, allow_insecure_fallback, want_json=True)
+
+    def get_text(self, url: str, params: dict | None = None, allow_insecure_fallback: bool = False) -> str:
+        r = self._get(url, params, allow_insecure_fallback)
+        r.encoding = r.encoding if r.encoding and r.encoding.lower() != "iso-8859-1" else "utf-8"
+        return r.text
+
+    def _get(self, url: str, params: dict | None, allow_insecure_fallback: bool, want_json: bool = False):
+        """取得 JSON（want_json）或原始回應。allow_insecure_fallback 只用在公開行情資料（不送任何帳密），
         而且只有在 SSL 憑證驗證失敗時才退而求其次，並寫進日誌。"""
         last_err: Exception | None = None
         verify = True
@@ -46,7 +54,7 @@ class Http:
                 r = self.session.get(url, params=params, timeout=self.timeout, verify=verify)
                 if r.status_code != 200:
                     raise FetchError(f"HTTP {r.status_code}")
-                return r.json()
+                return r.json() if want_json else r
             except requests.exceptions.SSLError as e:
                 last_err = e
                 if allow_insecure_fallback and verify:
