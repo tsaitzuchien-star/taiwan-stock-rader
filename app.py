@@ -219,16 +219,7 @@ with btn_col:
         time.sleep(1)
         st.rerun()
 
-st.markdown("<div class='risk-panel'>", unsafe_allow_html=True)
-st.markdown("<h3>🏛️ 秉宸好帥 - 國庫資金防護網</h3>", unsafe_allow_html=True)
-rc1, rc2, rc3 = st.columns(3)
-TOTAL_CAPITAL = SETTINGS.total_capital
-MAX_RISK_PCT = SETTINGS.max_risk_pct
-MAX_EXPOSURE = TOTAL_CAPITAL * MAX_RISK_PCT
-rc1.metric("🛡️ 大本營總戰備資金", f"NT$ {TOTAL_CAPITAL:,}")
-rc2.metric("⚠️ 單檔極限曝險 (5%)", f"NT$ {int(MAX_EXPOSURE):,}")
-rc3.metric("🚦 系統狀態", "V11 本地資料庫引擎", delta=f"鎖定全市場 {len(pure_stocks)} 檔", delta_color="normal")
-st.markdown("</div>", unsafe_allow_html=True)
+st.metric("🚦 系統狀態", "V11 本地資料庫引擎", delta=f"鎖定全市場 {len(pure_stocks)} 檔", delta_color="normal")
 
 # ==========================================
 # 6.5 本地資料庫狀態（TWSE / TPEx 官方盤後資料）
@@ -957,8 +948,6 @@ with tab1:
                 selected_id = selected_stock_str.split(" - ")[0]
                 selected_name = selected_stock_str.split(" - ")[1]
                 current_price = available_stocks[available_stocks['股票代號'] == selected_id]['現價(元)'].values[0]
-                max_buyable_lots = int(MAX_EXPOSURE // (current_price * 1000))
-                
                 with st.spinner(f"🕵️‍♂️ 調閱情報檔案..."): 
                     heat_index = get_ptt_shoeshine_index(selected_name)
                 
@@ -973,11 +962,6 @@ with tab1:
                 else:
                     st.error(f"🔴 **【擦鞋童核爆區】** PTT 討論高達 {heat_index} 篇！禁止買進！")
                 st.markdown("</div>", unsafe_allow_html=True)
-                
-                if max_buyable_lots >= 1: 
-                    st.success(f"⚖️ **資金審批通過：** 現價 {current_price:.2f} 元，最高授權購買 **{max_buyable_lots} 張**。")
-                else: 
-                    st.error(f"⚖️ **🚨 資金拒絕授權：** 現價 {current_price:.2f} 元，買一張已超標 ({int(MAX_EXPOSURE):,} 元)！")
                 
                 with st.spinner(f"展開 K 線圖..."):
                     is_otc = False if not twse_set else (selected_id not in twse_set)
@@ -1042,13 +1026,6 @@ with tab2:
                     
                     if not df_chart.empty:
                         current_price = float(df_chart.iloc[-1]['Close'])
-                        max_buyable_lots = int(MAX_EXPOSURE // (current_price * 1000))
-                        
-                        if max_buyable_lots >= 1: 
-                            st.success(f"⚖️ **資金審批通過：** 現價 {current_price:.2f} 元，最高授權購買 **{max_buyable_lots} 張**。")
-                        else: 
-                            st.error(f"⚖️ **🚨 資金拒絕授權：** 現價 {current_price:.2f} 元，買一張已超標 ({int(MAX_EXPOSURE):,} 元)！")
-                        
                         processed_df, passed_filter, current_ma5, current_ma20 = add_liquidity_filter(df_chart, volume_col='Volume', threshold=500)
                         
                         if not passed_filter:

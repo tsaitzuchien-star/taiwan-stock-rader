@@ -2,6 +2,18 @@
 
 以證交所、櫃買中心官方盤後資料為核心的台股掃描工具。全市場日 K 先存進本地資料庫，掃描直接讀庫，幾秒內完成。
 
+## 戰情室網頁版（新）
+
+雙擊 **`啟動戰情室.bat`**，瀏覽器會打開 http://127.0.0.1:8600 。深色交易台介面，台股慣例紅漲綠跌：
+
+- **總覽**：資料日期、漲跌家數、市場廣度、四大戰術命中數、今日雷達命中。
+- **雷達掃描**：選戰術、微調條件、全市場掃描，點欄位排序、匯出 CSV，點一列進個股。
+- **個股分析**：日 K（含 MA5/20/60、布林通道、成交量）、雷達指標、持倉防禦約談。
+- **資料與設定**：一鍵更新資料庫、看進度與錯誤。
+
+戰情室只在這台電腦上開（127.0.0.1），區網其他電腦連不進來。持倉風控、元大即時報價、警示會在下一版加入。
+舊版 Streamlit 介面（`啟動雷達.bat`）仍可使用。
+
 ## Windows 使用方式
 
 1. 安裝 [Python 3.11 以上](https://www.python.org/downloads/)，安裝時勾選「Add Python to PATH」。
@@ -11,7 +23,7 @@
 
 ## 個人設定
 
-把 `config.example.toml` 複製成 `config.local.toml` 再修改（總資金、單檔曝險比例等）。
+把 `config.example.toml` 複製成 `config.local.toml` 再修改（資料庫保留天數、元大連線等）。
 `config.local.toml`、金鑰、憑證都在 `.gitignore` 裡，不會上傳 GitHub。
 
 ## 元大 Spark API（第四艙、盤中模式）
@@ -31,7 +43,11 @@
 
 | 路徑 | 用途 |
 | --- | --- |
-| `app.py` | Streamlit 介面（四個艙） |
+| `web/` | 戰情室網頁前端（Preact + TradingView Lightweight Charts，免編譯） |
+| `radar/api/` | 戰情室後端 API（FastAPI，`python -m radar.api`） |
+| `radar/tactics.py` | 四大戰術與掃描條件 |
+| `radar/defense.py` | 持倉防禦約談（稅費損益、跌停壓力、季線防線） |
+| `app.py` | 舊版 Streamlit 介面（四個艙） |
 | `radar/collectors/` | 外部資料來源：TWSE、TPEx 官方盤後資料 |
 | `radar/yuanta/` | 元大 Spark API 唯讀用戶端（`python -m radar.yuanta.check` 連線測試） |
 | `radar/ui_yuanta.py` | 第四艙介面、盤中模式 |

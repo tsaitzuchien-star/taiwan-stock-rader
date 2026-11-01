@@ -17,15 +17,9 @@ class Settings:
     history_trading_days: int = 90
     # 對證交所 / 櫃買中心每次請求之間的間隔秒數，避免被封鎖。
     request_interval_sec: float = 3.0
-    total_capital: int = 1_170_000
-    max_risk_pct: float = 0.05
     extra: dict = field(default_factory=dict)
     # config.local.toml 的 [yuanta] 區段（帳號、密碼只存在使用者自己的電腦）
     yuanta: dict = field(default_factory=dict)
-
-    @property
-    def max_exposure(self) -> float:
-        return self.total_capital * self.max_risk_pct
 
 
 def load_settings(path: Path | None = None) -> Settings:
