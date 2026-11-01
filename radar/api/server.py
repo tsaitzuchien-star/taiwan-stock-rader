@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .. import alpha as radar_alpha
 from .. import collect as radar_collect
 from ..config import ROOT, Settings, load_settings
 from ..defense import evaluate as defense_evaluate
@@ -43,6 +44,7 @@ class Engine:
         self.store = Store(settings.db_path)
         self.lock = threading.RLock()
         self._cache: dict | None = None
+        self._alpha: dict | None = None
         self.update_job: dict = {"running": False}
 
     def health(self) -> dict:
@@ -83,11 +85,51 @@ class Engine:
     def invalidate(self) -> None:
         with self.lock:
             self._cache = None
+            self._alpha = None
+
+    def chip_data(self) -> dict:
+        with self.lock:
+            return {k: self.store.dataset(k) for k in ("inst", "margin", "valuation", "revenue", "company")}
+
+    def alpha(self) -> dict:
+        """法人選股因子表（依日 K 與籌碼資料的最新日期快取）。"""
+        cache = self.metrics()
+        with self.lock:
+            key = (cache["latest"],) + tuple(self.store.latest_dataset_date(k)
+                                             for k in ("inst", "margin", "valuation", "revenue"))
+            if self._alpha and self._alpha["key"] == key:
+                return self._alpha
+            data = self.chip_data()
+            df = radar_alpha.build(cache["df"], cache["bars"], data["inst"], data["margin"],
+                                   data["valuation"], data["revenue"], data["company"], cache["markets"])
+            self._alpha = {"key": key, "df": df, "inst": data["inst"], "margin": data["margin"],
+                           "revenue": data["revenue"],
+                           "coverage": {"inst_date": key[1], "margin_date": key[2], "valuation_date": key[3],
+                                        "revenue_ym": key[4],
+                                        "with_chips": int(df["f5"].notna().sum()) if not df.empty else 0}}
+            return self._alpha
 
 
 class ScanRequest(BaseModel):
     tactic: str | None = None
     params: dict | None = None
+
+
+def df_records(df: pd.DataFrame) -> list[dict]:
+    """DataFrame -> JSON 列（NaN 轉成 null）。"""
+    if df is None or df.empty:
+        return []
+    return json.loads(df.to_json(orient="records", force_ascii=False))
+
+
+def _lots(shares) -> int:
+    return int(round(shares / 1000)) if pd.notna(shares) else 0
+
+
+ALPHA_COLS = ["rank", "code", "name", "market", "industry", "price", "chg", "vol20", "score", "s_chip",
+              "s_momentum", "s_growth", "s_value", "f1", "t1", "d1", "f5", "t5", "f20", "t20", "f_streak",
+              "t_streak", "legal5_ratio", "trust5_ratio", "margin_bal", "margin_chg5", "short_ratio", "ret20",
+              "ret60", "dist_ma60", "pe", "pb", "dy", "rev_ym", "yoy", "mom", "cum_yoy", "tags"]
 
 
 def rows_json(df: pd.DataFrame, cache: dict) -> list[dict]:
@@ -208,6 +250,48 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return defense_evaluate(cost, shares, g["close"], fee_discount)
         except ValueError as e:
             raise HTTPException(400, str(e))
+
+    @app.get("/api/alpha")
+    def alpha(preset: str = "all", industry: str = "", market: str = "", min_vol20: float = radar_alpha.MIN_VOL20,
+              limit: int = 300):
+        a = engine.alpha()
+        df = radar_alpha.apply_preset(a["df"], preset, min_vol20)
+        if industry:
+            df = df[df["industry"] == industry]
+        if market:
+            df = df[df["market"] == market]
+        industries = sorted(a["df"]["industry"].dropna().unique().tolist()) if not a["df"].empty else []
+        return {"presets": radar_alpha.PRESETS, "weights": radar_alpha.WEIGHTS, "coverage": a["coverage"],
+                "industries": industries, "total": len(df),
+                "rows": df_records(df[ALPHA_COLS].head(limit)) if not df.empty else []}
+
+    @app.get("/api/alpha/sectors")
+    def alpha_sectors():
+        return radar_alpha.sectors(engine.alpha()["df"])
+
+    @app.get("/api/market/flows")
+    def market_flows():
+        a = engine.alpha()
+        return radar_alpha.market_flows(a["inst"], engine.metrics()["bars"])
+
+    @app.get("/api/stock/{code}/chips")
+    def stock_chips(code: str):
+        a = engine.alpha()
+        df = a["df"]
+        row = df[df["code"] == code] if not df.empty else df
+        inst = a["inst"][a["inst"]["code"] == code].sort_values("date")
+        margin = a["margin"][a["margin"]["code"] == code].sort_values("date")
+        rev = a["revenue"][a["revenue"]["code"] == code].sort_values("ym")
+        return {
+            "code": code,
+            "score": df_records(row[ALPHA_COLS])[0] if not row.empty else None,
+            "universe": len(df),
+            "inst": [{"date": r.date, "foreign": _lots(r.foreign_net), "trust": _lots(r.trust_net),
+                      "dealer": _lots(r.dealer_net)} for r in inst.itertuples()],
+            "margin": df_records(margin[["date", "margin_bal", "short_bal"]]),
+            "revenue": df_records(rev),
+            "coverage": a["coverage"],
+        }
 
     @app.post("/api/db/update")
     def db_update():
