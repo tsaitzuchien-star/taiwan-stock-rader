@@ -159,3 +159,64 @@ def test_update_chips_logs_and_isolates_errors(db):
                          report=collect.CollectReport(), fetchers=fetchers)
     assert sum(1 for m, _ in calls[n:] if m == "TWSE") == 0     # 已抓過的不重抓
     assert store.dataset("revenue")["ym"].max() == "2026-10"
+
+
+TPEX_GENERIC = ["代號", "名稱"] + ["買進股數", "賣出股數", "買賣超股數"] * 7 + ["三大法人買賣超股數合計"]
+
+
+def _tpex_row(code):
+    nets = {0: "-1,000", 3: "3,000", 6: "200"}
+    row = [code, "測試"]
+    for k in range(7):
+        row += ["1", "1", nets.get(k, "0")]
+    return row + ["2,200"]
+
+
+def test_parse_tpex_inst_generic_field_names():
+    rows = chips.parse_inst({"stat": "ok", "tables": [{"fields": TPEX_GENERIC, "data": [_tpex_row("6488")]}]}, DAY)
+    assert rows == [("6488", "2026-10-30", -1000, 3000, 200)]
+
+
+def test_parse_tpex_inst_legacy_aadata_and_error_hint():
+    row = _tpex_row("6488")
+    assert chips.parse_inst({"aaData": [row]}, DAY) == [("6488", "2026-10-30", -1000, 3000, 200)]
+    with pytest.raises(NoData):
+        chips.parse_inst({"aaData": [], "iTotalRecords": 0}, DAY)
+    with pytest.raises(ValueError, match="代號"):
+        chips.parse_inst({"tables": [{"fields": ["代號", "名稱", "X"], "data": [["6488", "a", "1"]]}]}, DAY)
+
+
+def test_parse_revenue_csv():
+    text = ("﻿出表日期,資料年月,公司代號,公司名稱,產業別,營業收入-當月營收,營業收入-上月比較增減(%),"
+            "營業收入-去年同月增減(%),累計營業收入-前期比較增減(%)\n"
+            "1151017,11509,6488,環球晶,半導體業,5000000,1.5,-10.2,-3.1\n")
+    rev, ind = chips.parse_revenue_csv(text)
+    assert rev == [("6488", "2026-09", 5000000.0, 1.5, -10.2, -3.1)] and ind == [("6488", "半導體業")]
+
+
+class FakeHttp:
+    def __init__(self, fail_hosts):
+        self.fail_hosts, self.calls = fail_hosts, []
+
+    def _check(self, url):
+        self.calls.append(url)
+        if any(h in url for h in self.fail_hosts):
+            raise RuntimeError("Failed to resolve")
+
+    def get_json(self, url, params=None, allow_insecure_fallback=False):
+        self._check(url)
+        return [{"資料年月": "11509", "公司代號": "6488", "營業收入-去年同月增減(%)": "1"}]
+
+    def get_text(self, url, params=None, allow_insecure_fallback=False):
+        self._check(url)
+        return "資料年月,公司代號,營業收入-去年同月增減(%)\n11509,6488,2\n"
+
+
+def test_fetch_tpex_revenue_falls_back():
+    h = FakeHttp(["openapi.tpex.org.tw"])
+    assert chips.fetch_revenue(h, "TPEX")[0][0][:2] == ("6488", "2026-09") and len(h.calls) == 1
+    h = FakeHttp(["tpex.org.tw"])
+    rev, _ = chips.fetch_revenue(h, "TPEX")
+    assert rev[0][4] == 2.0 and len(h.calls) == 3
+    with pytest.raises(ValueError, match="三個來源"):
+        chips.fetch_revenue(FakeHttp(["tpex.org.tw", "mopsfin"]), "TPEX")
