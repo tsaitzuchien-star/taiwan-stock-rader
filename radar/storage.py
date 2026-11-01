@@ -33,7 +33,39 @@ CREATE TABLE IF NOT EXISTS fetch_log (
     fetched_at TEXT NOT NULL,
     PRIMARY KEY (market, date)
 );
+-- 法人籌碼與基本面（全部來自證交所、櫃買中心官方公開資料）
+CREATE TABLE IF NOT EXISTS inst_flows (
+    code TEXT NOT NULL, date TEXT NOT NULL,
+    foreign_net INTEGER, trust_net INTEGER, dealer_net INTEGER,   -- 買賣超股數（股）
+    PRIMARY KEY (code, date)
+);
+CREATE TABLE IF NOT EXISTS margin (
+    code TEXT NOT NULL, date TEXT NOT NULL,
+    margin_bal INTEGER, short_bal INTEGER,                         -- 融資、融券餘額（張）
+    PRIMARY KEY (code, date)
+);
+CREATE TABLE IF NOT EXISTS valuation (
+    code TEXT NOT NULL, date TEXT NOT NULL,
+    pe REAL, pb REAL, dy REAL,                                     -- 本益比、股價淨值比、殖利率(%)
+    PRIMARY KEY (code, date)
+);
+CREATE TABLE IF NOT EXISTS revenue (
+    code TEXT NOT NULL, ym TEXT NOT NULL,                          -- 資料年月 YYYY-MM
+    revenue REAL, mom REAL, yoy REAL, cum_yoy REAL,                -- 營收（千元）、月增%、年增%、累計年增%
+    PRIMARY KEY (code, ym)
+);
+CREATE TABLE IF NOT EXISTS company (
+    code TEXT PRIMARY KEY, industry TEXT
+);
 """
+
+DATASET_TABLES = {
+    "inst": ("inst_flows", ["code", "date", "foreign_net", "trust_net", "dealer_net"]),
+    "margin": ("margin", ["code", "date", "margin_bal", "short_bal"]),
+    "valuation": ("valuation", ["code", "date", "pe", "pb", "dy"]),
+    "revenue": ("revenue", ["code", "ym", "revenue", "mom", "yoy", "cum_yoy"]),
+    "company": ("company", ["code", "industry"]),
+}
 
 
 class Store:
@@ -72,6 +104,38 @@ class Store:
                 rows,
             )
         return len(rows)
+
+    def upsert_dataset(self, dataset: str, rows: Iterable[tuple]) -> int:
+        table, cols = DATASET_TABLES[dataset]
+        rows = list(rows)
+        with self.tx() as c:
+            c.executemany(f"INSERT OR REPLACE INTO {table}({','.join(cols)}) "
+                          f"VALUES({','.join('?' * len(cols))})", rows)
+        return len(rows)
+
+    def prune_dated(self, table: str, keep_days: int) -> None:
+        with self.tx() as c:
+            row = c.execute(
+                f"SELECT date FROM (SELECT DISTINCT date FROM {table} ORDER BY date DESC LIMIT ?) "
+                "ORDER BY date ASC LIMIT 1", (keep_days,)).fetchone()
+            if row:
+                c.execute(f"DELETE FROM {table} WHERE date < ?", (row[0],))
+
+    def dataset(self, dataset: str, since: str | None = None) -> pd.DataFrame:
+        table, cols = DATASET_TABLES[dataset]
+        sql, params = f"SELECT {','.join(cols)} FROM {table}", []
+        if since and "date" in cols:
+            sql += " WHERE date >= ?"
+            params.append(since)
+        return pd.read_sql_query(sql, self._conn, params=params)
+
+    def latest_dataset_date(self, dataset: str) -> str | None:
+        table, cols = DATASET_TABLES[dataset]
+        key = "date" if "date" in cols else ("ym" if "ym" in cols else None)
+        if not key:
+            return None
+        row = self._conn.execute(f"SELECT MAX({key}) FROM {table}").fetchone()
+        return row[0] if row else None
 
     def log_fetch(self, market: str, day: date, status: str, rows: int = 0, message: str = "") -> None:
         with self.tx() as c:

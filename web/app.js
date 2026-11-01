@@ -31,7 +31,7 @@ function useHash() {
     addEventListener('hashchange', on);
     return () => removeEventListener('hashchange', on);
   }, []);
-  return hash.replace(/^#\/?/, '').split('/');
+  return hash.replace(/^#\/?/, '').split('/').map((x) => decodeURIComponent(x));
 }
 
 function Spark({ data, w = 84, h = 22 }) {
@@ -45,7 +45,8 @@ function Spark({ data, w = 84, h = 22 }) {
 
 // ---------------------------------------------------------------- 外框
 const NAV = [
-  ['overview', '總覽'], ['radar', '雷達掃描'], ['stock', '個股分析'], ['positions', '持倉風控'], ['settings', '資料與設定'],
+  ['overview', '總覽'], ['alpha', '法人選股'], ['sectors', '產業輪動'], ['radar', '雷達掃描'], ['stock', '個股分析'],
+  ['positions', '持倉風控'], ['settings', '資料與設定'],
 ];
 
 function TopBar({ health, breadth }) {
@@ -84,11 +85,17 @@ function SideNav({ page, health }) {
 function Overview({ health, breadth }) {
   const [summary, setSummary] = useState(null);
   const [hits, setHits] = useState(null);
+  const [alpha, setAlpha] = useState(null);
+  const [flows, setFlows] = useState(null);
+  const [sectors, setSectors] = useState(null);
   const [err, setErr] = useState('');
   useEffect(() => {
     if (!health?.db?.latest_date) return;
     api('/api/tactics/summary').then(setSummary).catch((e) => setErr(e.message));
     post('/api/scan', { tactic: 'dive' }).then(setHits).catch((e) => setErr(e.message));
+    api('/api/alpha?limit=10').then(setAlpha).catch((e) => setErr(e.message));
+    api('/api/market/flows').then(setFlows).catch(() => {});
+    api('/api/alpha/sectors').then(setSectors).catch(() => {});
   }, [health?.db?.latest_date]);
   if (health && !health.db.latest_date) return html`<${EmptyDb} />`;
   const max = Math.max(1, ...(summary || []).map((s) => s.count));
@@ -110,12 +117,19 @@ function Overview({ health, breadth }) {
     ${err && html`<div class="toast">${err}</div>`}
     <section class="grid g-2">
       <div class="panel">
+        <div class="ph">法人綜合評分 前 10 名<span class="sub"><a href="#/alpha">看全部</a></span></div>
+        ${alpha && !alpha.coverage.with_chips ? html`<${NoChips} />` : html`<${AlphaTable} rows=${(alpha?.rows || []).slice(0, 10)} compact />`}
+      </div>
+      <${FlowsPanel} flows=${flows} />
+    </section>
+    <section class="grid g-2">
+      <div class="panel">
         <div class="ph">雷達今日命中 · 深海潛艦<span class="sub">${hits ? `${hits.rows.length} 檔` : '計算中…'} · <a href="#/radar">看全部</a></span></div>
         <${HitTable} rows=${(hits?.rows || []).slice(0, 10)} compact />
       </div>
       <div class="panel">
-        <div class="ph">我的持倉<span class="sub">元大帳務</span></div>
-        <div class="empty">連上元大後，這裡會顯示庫存、即時損益與季線防線。<br />這部分會在第二批推出，現在可以先到 <a href="#/stock">個股分析</a> 手動輸入成本做防禦約談。</div>
+        <div class="ph">產業資金流向<span class="sub">法人近 5 日淨買超 · <a href="#/sectors">產業輪動</a></span></div>
+        <${SectorFlowBars} sectors=${sectors} />
       </div>
     </section>
     <section class="grid g-3">
@@ -150,6 +164,192 @@ function Overview({ health, breadth }) {
 
 function EmptyDb() {
   return html`<div class="panel"><div class="empty">資料庫還是空的。<br />請到 <a href="#/settings">資料與設定</a> 按「更新資料庫」，第一次約 5～10 分鐘。</div></div>`;
+}
+
+function NoChips() {
+  return html`<div class="empty">還沒有法人籌碼資料。<br />請到 <a href="#/settings">資料與設定</a> 按「更新資料庫」，會一併下載三大法人、融資融券、本益比與月營收（第一次約多 4 分鐘）。</div>`;
+}
+
+// ---------------------------------------------------------------- 法人籌碼元件
+const yi = (v) => `${v > 0 ? '+' : ''}${fmt(v, 1)}`;
+
+function FlowsPanel({ flows }) {
+  const last = flows?.[flows.length - 1];
+  const days = (flows || []).slice(-10);
+  const max = Math.max(1, ...days.map((d) => Math.abs(d.foreign + d.trust + d.dealer)));
+  return html`<div class="panel">
+    <div class="ph">三大法人買賣超<span class="sub">億元（以收盤價估算）${last ? ` · ${last.date}` : ''}</span></div>
+    ${!flows ? html`<div class="empty">計算中…</div>` : !flows.length ? html`<${NoChips} />` : html`<div class="pb">
+      <div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">
+        ${[['外資', last.foreign], ['投信', last.trust], ['自營商', last.dealer], ['合計', last.foreign + last.trust + last.dealer]].map(([n, v]) => html`
+          <div><div class="mut" style="font-size:12px">${n}</div><div class=${`num ${cls(v)}`} style="font-size:20px;font-weight:600;margin-top:4px">${yi(v)}</div></div>`)}
+      </div>
+      <div class="mut" style="font-size:12px;margin:16px 0 6px">近 ${days.length} 日合計</div>
+      <div class="flowbars">${days.map((d) => {
+        const v = d.foreign + d.trust + d.dealer;
+        return html`<div class="fb" title=${`${d.date} 合計 ${yi(v)} 億（外資 ${yi(d.foreign)}、投信 ${yi(d.trust)}、自營 ${yi(d.dealer)}）`}>
+          <div class="fb-up">${v > 0 && html`<i style=${`height:${v / max * 100}%;background:${C.up}`}></i>`}</div>
+          <div class="fb-dn">${v < 0 && html`<i style=${`height:${-v / max * 100}%;background:${C.down}`}></i>`}</div>
+          <span>${d.date.slice(5)}</span></div>`;
+      })}</div>
+    </div>`}
+  </div>`;
+}
+
+function SectorFlowBars({ sectors }) {
+  if (!sectors) return html`<div class="empty">計算中…</div>`;
+  const list = [...sectors].filter((x) => x.industry !== '其他').sort((a, b) => Math.abs(b.legal5) - Math.abs(a.legal5)).slice(0, 10);
+  if (!list.length || list.every((x) => !x.legal5)) return html`<${NoChips} />`;
+  const max = Math.max(...list.map((x) => Math.abs(x.legal5)), 0.1);
+  return html`<div class="pb" style="display:flex;flex-direction:column;gap:9px;font-size:13px">
+    ${list.map((x) => html`<a class="sfb" href=${`#/alpha/all/${encodeURIComponent(x.industry)}`}>
+      <span class="sfb-n">${x.industry}</span>
+      <span class="sfb-l">${x.legal5 < 0 && html`<i style=${`width:${-x.legal5 / max * 100}%;background:${C.down}`}></i>`}</span>
+      <span class="sfb-r">${x.legal5 > 0 && html`<i style=${`width:${x.legal5 / max * 100}%;background:${C.up}`}></i>`}</span>
+      <span class=${`num ${cls(x.legal5)}`} style="flex:0 0 64px;text-align:right">${yi(x.legal5)}</span></a>`)}
+  </div>`;
+}
+
+function Score({ v, big }) {
+  if (v === null || v === undefined) return html`<span class="mut">—</span>`;
+  const color = v >= 70 ? C.up : v >= 50 ? C.accent : C.muted;
+  return html`<span class=${`score ${big ? 'big' : ''}`}><span class="num" style=${`color:${color}`}>${fmt(v, 0)}</span>
+    <span class="meter"><span style=${`width:${v}%;background:${color}`}></span></span></span>`;
+}
+
+function Factors({ r }) {
+  return html`<span class="factors" title=${`籌碼 ${fmt(r.s_chip, 0)}、動能 ${fmt(r.s_momentum, 0)}、成長 ${fmt(r.s_growth, 0)}、估值 ${fmt(r.s_value, 0)}`}>
+    ${['s_chip', 's_momentum', 's_growth', 's_value'].map((k) => html`<i style=${`height:${Math.max(4, r[k] || 0)}%;background:${(r[k] || 0) >= 70 ? C.up : (r[k] || 0) >= 50 ? C.accent : '#3A4458'}`}></i>`)}
+  </span>`;
+}
+
+const tagClass = (t) => (/連賣/.test(t) ? 'dn' : /土洋|投信|外資|爆發/.test(t) ? 'hot' : /退場/.test(t) ? 'up' : '');
+
+const ACOLS = [
+  ['rank', '#'], ['code', '代號', 'l'], ['name', '名稱', 'l'], ['industry', '產業', 'l'], ['score', '總分', 'l'], ['factors', '四因子', 'l', true],
+  ['chg', '漲跌%'], ['f5', '外資5日(張)'], ['t5', '投信5日(張)'], ['t_streak', '投信連買'], ['legal5_ratio', '法人佔量%'],
+  ['margin_chg5', '融資5日(張)'], ['yoy', '營收年增%'], ['pe', '本益比'], ['dy', '殖利率%'],
+];
+
+function AlphaTable({ rows, compact, sort, onSort }) {
+  if (!rows.length) return html`<div class="empty">沒有符合條件的股票。</div>`;
+  const cols = compact ? ACOLS.filter(([k]) => ['rank', 'code', 'name', 'score', 'factors', 'f5', 't5'].includes(k)) : ACOLS;
+  const cell = (r, k) => {
+    switch (k) {
+      case 'rank': return html`<td class="num mut">${r.rank}</td>`;
+      case 'code': return html`<td class="l num acc">${r.code}</td>`;
+      case 'name': return html`<td class="l">${r.name}</td>`;
+      case 'industry': return html`<td class="l mut">${r.industry}</td>`;
+      case 'score': return html`<td class="l"><${Score} v=${r.score} /></td>`;
+      case 'factors': return html`<td class="l"><${Factors} r=${r} /></td>`;
+      case 'chg': return html`<td class=${`num ${cls(r.chg)}`}>${signed(r.chg, 2)}</td>`;
+      case 'f5': case 't5': case 'margin_chg5': return html`<td class=${`num ${cls(r[k])}`}>${r[k] == null ? '—' : signed(r[k], 0)}</td>`;
+      case 't_streak': return html`<td class=${`num ${cls(r.t_streak)}`}>${r.t_streak == null ? '—' : r.t_streak > 0 ? `${r.t_streak} 日` : r.t_streak < 0 ? `賣 ${-r.t_streak}` : '0'}</td>`;
+      case 'legal5_ratio': case 'yoy': return html`<td class=${`num ${cls(r[k])}`}>${r[k] == null ? '—' : signed(r[k], 1)}</td>`;
+      default: return html`<td class="num">${fmt(r[k], k === 'pe' ? 1 : 2)}</td>`;
+    }
+  };
+  return html`<div class="tablewrap"><table>
+    <thead><tr>${cols.map(([k, label, al, nosort]) => html`<th class=${`${al || ''} ${onSort && !nosort ? 'sortable' : ''} ${sort?.key === k ? 'sorted' : ''}`}
+      onClick=${() => onSort && !nosort && onSort(k)}>${label}${sort?.key === k ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`)}
+      ${!compact && html`<th class="l">訊號</th>`}</tr></thead>
+    <tbody>${rows.map((r) => html`<tr onClick=${() => { location.hash = `#/stock/${r.code}`; }}>
+      ${cols.map(([k]) => cell(r, k))}
+      ${!compact && html`<td class="l">${(r.tags || []).map((t) => html`<span class=${`tag ${tagClass(t)}`}>${t}</span>`)}</td>`}
+    </tr>`)}</tbody></table></div>`;
+}
+
+function alphaCsv(rows) {
+  const cols = ACOLS.filter(([, , , nosort]) => !nosort);
+  const head = [...cols.map(([, l]) => l), '籌碼', '動能', '成長', '估值', '訊號'].join(',');
+  const body = rows.map((r) => [...cols.map(([k]) => r[k] ?? ''), r.s_chip, r.s_momentum, r.s_growth, r.s_value, (r.tags || []).join(' ')].join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + head + '\n' + body], { type: 'text/csv;charset=utf-8' }));
+  a.download = `法人選股_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+}
+
+// ---------------------------------------------------------------- 法人選股
+function Alpha({ preset: initPreset, industry: initIndustry, health }) {
+  const [preset, setPreset] = useState(initPreset || 'all');
+  const [industry, setIndustry] = useState(initIndustry || '');
+  const [market, setMarket] = useState('');
+  const [minVol, setMinVol] = useState(300);
+  const [res, setRes] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [sort, setSort] = useState(null);
+  useEffect(() => { setPreset(initPreset || 'all'); setIndustry(initIndustry || ''); }, [initPreset, initIndustry]);
+  useEffect(() => {
+    if (!health?.db?.latest_date) return;
+    setBusy(true); setErr('');
+    const q = new URLSearchParams({ preset, industry, market, min_vol20: minVol, limit: 500 });
+    api(`/api/alpha?${q}`).then((r) => { setRes(r); setSort(null); }).catch((e) => setErr(e.message)).finally(() => setBusy(false));
+  }, [preset, industry, market, minVol, health?.db?.latest_date]);
+  const rows = useMemo(() => {
+    if (!res) return [];
+    if (!sort) return res.rows;
+    const { key, dir } = sort;
+    return [...res.rows].sort((a, b) => {
+      const x = a[key], y = b[key];
+      return (typeof x === 'string' ? x.localeCompare(y) : (x ?? -1e18) - (y ?? -1e18)) * dir;
+    });
+  }, [res, sort]);
+  if (health && !health.db.latest_date) return html`<${EmptyDb} />`;
+  const cov = res?.coverage;
+  const pr = res?.presets.find((p) => p.id === preset);
+  return html`
+    <section class="panel pb" style="display:flex;flex-direction:column;gap:14px">
+      <div class="presets">${(res?.presets || []).map((p) => html`<button type="button" class=${`pill ${p.id === preset ? 'on' : ''}`}
+        onClick=${() => setPreset(p.id)}>${p.name}<small>${p.desc}</small></button>`)}</div>
+      <div class="filters">
+        <label class="fld">產業<select value=${industry} onChange=${(e) => setIndustry(e.target.value)}>
+          <option value="">全部產業</option>${(res?.industries || []).map((x) => html`<option value=${x}>${x}</option>`)}</select></label>
+        <label class="fld">市場<select value=${market} onChange=${(e) => setMarket(e.target.value)}>
+          <option value="">上市＋上櫃</option><option value="TWSE">上市</option><option value="TPEX">上櫃</option></select></label>
+        <label class="fld">月均量下限（張）<input type="number" step="100" min="0" value=${minVol} onChange=${(e) => setMinVol(parseFloat(e.target.value) || 0)} /></label>
+        <div class="mut covline">${cov ? html`法人 <span class="num">${cov.inst_date || '—'}</span> · 融資 <span class="num">${cov.margin_date || '—'}</span>
+          · 本益比 <span class="num">${cov.valuation_date || '—'}</span> · 營收 <span class="num">${cov.revenue_ym || '—'}</span>` : ''}</div>
+      </div>
+    </section>
+    ${err && html`<div class="toast">${err}</div>`}
+    ${cov && !cov.with_chips && html`<div class="panel"><${NoChips} /></div>`}
+    <section class="panel" style="min-width:0">
+      <div class="ph">${pr?.name || '法人選股'}${industry ? ` · ${industry}` : ''}
+        <span class="sub">${busy ? '計算中… · ' : ''}${res ? `${res.total} 檔 · 點欄位排序 · ` : ''}
+          ${rows.length ? html`<a href="javascript:void 0" onClick=${() => alphaCsv(rows)}>匯出 CSV</a>` : ''}</span></div>
+      <div class="mut" style="font-size:12px;padding:10px 16px 0;line-height:1.7">
+        總分 = 籌碼 35% ＋ 動能 25% ＋ 成長 25% ＋ 估值 15%。每個指標先在全市場排百分位（0～100），大型股、小型股可以直接比較。
+        四因子小圖由左到右：籌碼、動能、成長、估值。</div>
+      ${res ? html`<${AlphaTable} rows=${rows} sort=${sort} onSort=${(k) => setSort(sort?.key === k ? { key: k, dir: -sort.dir } : { key: k, dir: -1 })} />` : html`<div class="empty">計算中…</div>`}
+    </section>`;
+}
+
+// ---------------------------------------------------------------- 產業輪動
+function Sectors({ health }) {
+  const [list, setList] = useState(null);
+  const [mode, setMode] = useState('chg');
+  useEffect(() => { if (health?.db?.latest_date) api('/api/alpha/sectors').then(setList); }, [health?.db?.latest_date]);
+  if (health && !health.db.latest_date) return html`<${EmptyDb} />`;
+  const val = (x) => (mode === 'chg' ? x.chg : mode === 'legal5' ? x.legal5 : x.score - 50);
+  const scale = Math.max(0.1, ...(list || []).map((x) => Math.abs(val(x))));
+  const bg = (v) => {
+    const a = Math.min(1, Math.abs(v) / scale) * 0.75 + 0.08;
+    return v > 0 ? `rgba(255,90,95,${a})` : v < 0 ? `rgba(43,196,138,${a})` : '#1A2131';
+  };
+  return html`<section class="panel">
+    <div class="ph">產業輪動熱力圖<span class="sub">方塊依成交金額排序，點一下看該產業的法人選股</span></div>
+    <div class="pb" style="display:flex;flex-direction:column;gap:14px">
+      <div class="seg">${[['chg', '今日漲跌'], ['legal5', '法人 5 日淨買超'], ['score', '平均法人評分']].map(([k, l]) => html`
+        <button type="button" class=${mode === k ? 'on' : ''} onClick=${() => setMode(k)}>${l}</button>`)}</div>
+      ${!list ? html`<div class="empty">計算中…</div>` : html`<div class="heat">${list.map((x) => html`
+        <a class="tile" href=${`#/alpha/all/${encodeURIComponent(x.industry)}`} style=${`background:${bg(val(x))}`}>
+          <b>${x.industry}</b>
+          <span class="num big">${mode === 'chg' ? signed(x.chg, 2, '%') : mode === 'legal5' ? `${yi(x.legal5)} 億` : fmt(x.score, 0)}</span>
+          <span class="num small">${x.up}/${x.n} 上漲 · 成交 ${fmt(x.turnover, 0)} 億</span>
+        </a>`)}</div>`}
+    </div>
+  </section>`;
 }
 
 // ---------------------------------------------------------------- 雷達
@@ -335,13 +535,70 @@ function Defense({ code, price, health }) {
   </div>`;
 }
 
+function ChipChart({ inst, margin }) {
+  const W = 900, H = 170, pad = 4;
+  const days = inst.slice(-20);
+  if (!days.length) return html`<div class="empty">還沒有這檔的法人資料。</div>`;
+  const max = Math.max(1, ...days.flatMap((d) => [Math.abs(d.foreign), Math.abs(d.trust)]));
+  const bw = (W - pad * 2) / days.length;
+  const mid = H / 2;
+  const y = (v) => (v / max) * (mid - 10);
+  const mm = margin.filter((m) => days.some((d) => d.date === m.date));
+  const mlo = Math.min(...mm.map((m) => m.margin_bal)), mhi = Math.max(...mm.map((m) => m.margin_bal));
+  const mx = (date) => pad + days.findIndex((d) => d.date === date) * bw + bw / 2;
+  const my = (v) => 12 + (1 - (v - mlo) / ((mhi - mlo) || 1)) * (H - 24);
+  return html`<svg viewBox="0 0 ${W} ${H + 18}" class="chipsvg" role="img" aria-label="近 20 日外資、投信買賣超與融資餘額">
+    <line x1="0" x2=${W} y1=${mid} y2=${mid} stroke=${C.line} />
+    ${days.map((d, i) => {
+      const x = pad + i * bw;
+      return html`<g><title>${d.date}　外資 ${signed(d.foreign, 0)} 張　投信 ${signed(d.trust, 0)} 張　自營 ${signed(d.dealer, 0)} 張</title>
+        <rect x=${x + bw * 0.12} width=${bw * 0.36} y=${d.foreign > 0 ? mid - y(d.foreign) : mid} height=${Math.abs(y(d.foreign))} fill=${C.blue} />
+        <rect x=${x + bw * 0.52} width=${bw * 0.36} y=${d.trust > 0 ? mid - y(d.trust) : mid} height=${Math.abs(y(d.trust))} fill=${C.accent} />
+        ${(i % 5 === 0 || i === days.length - 1) && html`<text x=${x + bw / 2} y=${H + 14} fill=${C.muted} font-size="11" text-anchor="middle">${d.date.slice(5)}</text>`}</g>`;
+    })}
+    ${mm.length > 1 && html`<polyline fill="none" stroke="#C9D1E0" stroke-width="1.5" stroke-dasharray="4 3"
+      points=${mm.map((m) => `${mx(m.date).toFixed(1)},${my(m.margin_bal).toFixed(1)}`).join(' ')} />`}
+  </svg>`;
+}
+
+function ScoreCard({ chips }) {
+  const r = chips?.score;
+  if (!chips) return null;
+  if (!r || !chips.coverage.with_chips) return html`<div class="panel"><div class="ph">法人評分卡</div><${NoChips} /></div>`;
+  const kv = (label, v) => html`<div class="kv"><span class="mut">${label}</span><span class="num">${v}</span></div>`;
+  const streak = (n) => (n == null ? '—' : n > 0 ? html`<span class="up">連買 ${n} 日</span>` : n < 0 ? html`<span class="dn">連賣 ${-n} 日</span>` : '—');
+  const sg = (v, d = 0, u = '') => html`<span class=${cls(v)}>${signed(v, d, u)}</span>`;
+  return html`<div class="panel">
+    <div class="ph">法人評分卡<span class="sub">全市場第 ${r.rank} / ${chips.universe} 名</span></div>
+    <div class="pb" style="display:flex;flex-direction:column;gap:10px">
+      <${Score} v=${r.score} big />
+      ${[['籌碼', r.s_chip], ['動能', r.s_momentum], ['成長', r.s_growth], ['估值', r.s_value]].map(([n, v]) => html`
+        <div class="frow"><span class="mut">${n}</span><span class="meter"><span style=${`width:${v}%;background:${v >= 70 ? C.up : v >= 50 ? C.accent : '#3A4458'}`}></span></span><span class="num">${fmt(v, 0)}</span></div>`)}
+      <div>${(r.tags || []).map((t) => html`<span class=${`tag ${tagClass(t)}`}>${t}</span>`)}</div>
+    </div>
+    <div style="padding:0 16px 12px">
+      ${kv('外資', html`${streak(r.f_streak)} · 5日 ${sg(r.f5)} · 20日 ${sg(r.f20)}`)}
+      ${kv('投信', html`${streak(r.t_streak)} · 5日 ${sg(r.t5)} · 20日 ${sg(r.t20)}`)}
+      ${kv('法人 5 日買超佔成交量', sg(r.legal5_ratio, 1, '%'))}
+      ${kv('融資餘額 · 5 日變化', html`${fmt(r.margin_bal, 0)} 張 · ${sg(r.margin_chg5)}`)}
+      ${kv('券資比', r.short_ratio == null ? '—' : `${fmt(r.short_ratio, 1)}%`)}
+      ${kv('本益比 · 淨值比 · 殖利率', `${fmt(r.pe, 1)} · ${fmt(r.pb)} · ${fmt(r.dy)}%`)}
+      ${kv(`月營收 ${r.rev_ym || ''}`, html`年增 ${sg(r.yoy, 1, '%')} · 月增 ${sg(r.mom, 1, '%')}`)}
+      ${kv('累計營收年增', sg(r.cum_yoy, 1, '%'))}
+      ${kv('20 日 · 60 日漲幅', html`${sg(r.ret20, 1, '%')} · ${sg(r.ret60, 1, '%')}`)}
+    </div>
+  </div>`;
+}
+
 function Stock({ code, stocks, health }) {
   const [data, setData] = useState(null);
+  const [chips, setChips] = useState(null);
   const [err, setErr] = useState('');
   useEffect(() => {
     if (!code) return;
-    setData(null); setErr('');
+    setData(null); setChips(null); setErr('');
     api(`/api/stock/${code}`).then(setData).catch((e) => setErr(e.message));
+    api(`/api/stock/${code}/chips`).then(setChips).catch(() => {});
   }, [code]);
   const m = data?.metrics;
   const last = data?.candles[data.candles.length - 1];
@@ -369,8 +626,12 @@ function Stock({ code, stocks, health }) {
           <div class="ph">日 K 線<span class="sub">資料庫保留 ${data.candles.length} 個交易日</span></div>
           <div class="legend"><span style="color:#C9D1E0">— MA5</span><span class="acc">— MA20</span><span style="color:var(--blue)">— MA60</span><span class="mut">— 布林通道</span></div>
           <div style="padding:8px 8px 12px"><${KChart} data=${data} /></div>
+          <div class="ph" style="border-top:1px solid var(--line)">法人籌碼 · 近 20 日<span class="sub">
+            <span style="color:var(--blue)">■ 外資</span>　<span class="acc">■ 投信</span>　<span style="color:#C9D1E0">┅ 融資餘額</span>　單位：張</span></div>
+          <div style="padding:8px 12px 12px">${chips ? html`<${ChipChart} inst=${chips.inst} margin=${chips.margin} />` : html`<div class="empty">載入中…</div>`}</div>
         </div>
         <div style="flex:1 1 340px;display:flex;flex-direction:column;gap:16px;min-width:0">
+          <${ScoreCard} chips=${chips} />
           <div class="panel">
             <div class="ph">雷達指標<span class="sub">${data.candles.length < 60 ? '不足 60 日，部分指標無法計算' : '最新交易日'}</span></div>
             ${m ? html`<div style="padding:4px 16px 12px">
@@ -418,7 +679,7 @@ function Settings({ health, reload }) {
           ${job.running && html`<div class="progress"><div style=${`width:${(job.progress || 0) * 100}%`}></div></div>`}
           ${job.message && html`<div class="mut" style="font-size:12px">${job.running ? job.message : (job.summary || '')}</div>`}
           ${job.errors?.length ? html`<div class="up" style="font-size:12px">${job.errors.slice(0, 5).map((e) => html`<div>${e}</div>`)}</div>` : ''}
-          <div class="mut" style="font-size:12px;line-height:1.7">建議每個交易日 14:30 後更新一次；第一次建庫約 5～10 分鐘，之後只要幾秒。</div>
+          <div class="mut" style="font-size:12px;line-height:1.7">建議每個交易日 15:30 後更新一次（三大法人、融資融券約 15:00～16:00 公布）。第一次建庫約 10～15 分鐘，之後約半分鐘。</div>
         </div>
       </div>
     </div>
@@ -439,7 +700,7 @@ function Settings({ health, reload }) {
 
 // ---------------------------------------------------------------- 主程式
 function App() {
-  const [page, arg] = useHash();
+  const [page, arg, arg2] = useHash();
   const [health, setHealth] = useState(null);
   const [breadth, setBreadth] = useState(null);
   const [stocks, setStocks] = useState([]);
@@ -452,6 +713,8 @@ function App() {
   useEffect(load, []);
   let body;
   switch (page) {
+    case 'alpha': body = html`<${Alpha} preset=${arg} industry=${arg2} health=${health} />`; break;
+    case 'sectors': body = html`<${Sectors} health=${health} />`; break;
     case 'radar': body = html`<${Radar} initialTactic=${arg} health=${health} />`; break;
     case 'stock': body = html`<${Stock} code=${arg} stocks=${stocks} health=${health} />`; break;
     case 'positions': body = html`<${Positions} />`; break;

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Callable
 
+from .collectors import chips
 from .collectors.exchanges import FETCHERS, NoData
 from .collectors.http import FetchError, Http
 from .config import Settings, load_settings
@@ -32,7 +33,7 @@ class CollectReport:
     errors: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
-        parts = [f"{m} 新增 {n} 天" for m, n in self.fetched.items()]
+        parts = [f"{m} 新增 {n} 份" if m == "籌碼" else f"{m} 新增 {n} 天" for m, n in self.fetched.items()]
         if self.errors:
             parts.append(f"{len(self.errors)} 個錯誤")
         return "，".join(parts) or "沒有需要更新的資料"
@@ -47,7 +48,7 @@ def candidate_days(today: date, trading_days: int) -> list[date]:
 
 def update(store: Store, settings: Settings, http: Http | None = None,
            today: date | None = None, progress: Progress | None = None,
-           fetchers=None) -> CollectReport:
+           fetchers=None, chip_fetchers=None) -> CollectReport:
     http = http or Http(min_interval=settings.request_interval_sec)
     today = today or date.today()
     fetchers = fetchers or FETCHERS
@@ -95,8 +96,59 @@ def update(store: Store, settings: Settings, http: Http | None = None,
             have += 1
 
     store.prune_bars(settings.history_trading_days)
+    # 測試只換掉日 K 下載器時，不去碰籌碼資料
+    if chip_fetchers is not False and (chip_fetchers is not None or fetchers is FETCHERS):
+        update_chips(store, settings, http, today, progress, report, chip_fetchers or None)
     progress("更新完成：" + report.summary(), 1.0)
     return report
+
+
+def update_chips(store: Store, settings: Settings, http: Http, today: date,
+                 progress: Progress, report: CollectReport, fetchers: dict | None = None) -> None:
+    """法人籌碼與基本面。交易日直接用資料庫裡已有日 K 的日期，不必猜休市日。"""
+    f = fetchers or {"inst": chips.fetch_inst, "margin": chips.fetch_margin,
+                     "valuation": chips.fetch_valuation, "revenue": chips.fetch_revenue}
+    days = [date.fromisoformat(d) for d in store.trading_days()]
+    if not days:
+        return
+    recent = list(reversed(days[-settings.chip_trading_days:]))
+    jobs: list[tuple[str, str, date | None]] = []
+    for market in ("TWSE", "TPEX"):
+        for ds in ("inst", "margin"):
+            jobs += [(market, ds, d) for d in recent]
+        jobs.append((market, "valuation", days[-1]))
+        jobs.append((market, "revenue", None))
+    names = {"inst": "三大法人", "margin": "融資融券", "valuation": "本益比", "revenue": "月營收"}
+    failed: dict[str, int] = {}
+    report.fetched.setdefault("籌碼", 0)
+    for i, (market, ds, day) in enumerate(jobs):
+        key = f"{market}:{ds}"
+        log_day = day or today          # 月營收每天最多抓一次
+        if store.fetch_status(key, log_day) in ("ok", "holiday"):
+            continue
+        if failed.get(key, 0) >= 3:      # 同一種資料連錯 3 次就先跳過，不拖慢整體
+            continue
+        progress(f"下載 {market} {names[ds]} {day or ''}…", 0.9 + 0.1 * i / len(jobs))
+        try:
+            if ds == "revenue":
+                rev, ind = f[ds](http, market)
+                n = store.upsert_dataset("revenue", rev)
+                store.upsert_dataset("company", ind)
+            else:
+                n = store.upsert_dataset(ds, f[ds](http, market, day))
+        except NoData as e:
+            store.log_fetch(key, log_day, "holiday" if log_day < today else "nodata", 0, str(e))
+            continue
+        except Exception as e:  # noqa: BLE001  單一資料失敗不影響其他資料
+            store.log_fetch(key, log_day, "error", 0, str(e))
+            report.errors.append(f"{market} {names[ds]} {day or ''}: {e}")
+            failed[key] = failed.get(key, 0) + 1
+            continue
+        store.log_fetch(key, log_day, "ok", n)
+        report.fetched["籌碼"] += 1
+    store.prune_dated("inst_flows", settings.chip_trading_days)
+    store.prune_dated("margin", settings.chip_trading_days)
+    store.prune_dated("valuation", 5)
 
 
 def main(argv: list[str] | None = None) -> int:
