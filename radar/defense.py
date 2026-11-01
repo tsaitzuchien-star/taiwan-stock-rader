@@ -12,8 +12,7 @@ def _fee(amount: float, discount: float) -> int:
 
 
 def evaluate(cost: float, shares: int, closes: pd.Series, fee_discount: float = 1.0,
-             heat: int | None = None, blind_spot: bool = False,
-             max_exposure: float | None = None) -> dict:
+             heat: int | None = None, blind_spot: bool = False) -> dict:
     """closes：依日期由舊到新的收盤價。回傳畫面要顯示的數字與裁決。"""
     closes = closes.dropna().astype(float)
     if closes.empty or cost <= 0 or shares <= 0:
@@ -41,10 +40,6 @@ def evaluate(cost: float, shares: int, closes: pd.Series, fee_discount: float = 
         "escape_strong": ma20 if price < ma60 else None,
         "verdict": {"level": level, "title": title, "text": text},
     }
-    if max_exposure:
-        mv = price * shares
-        out["exposure"] = {"market_value": mv, "limit": max_exposure, "over": mv > max_exposure,
-                           "ratio": mv / max_exposure}
     return out
 
 

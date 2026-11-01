@@ -23,7 +23,7 @@
 
 ## 個人設定
 
-把 `config.example.toml` 複製成 `config.local.toml` 再修改（總資金、單檔曝險比例等）。
+把 `config.example.toml` 複製成 `config.local.toml` 再修改（資料庫保留天數、元大連線等）。
 `config.local.toml`、金鑰、憑證都在 `.gitignore` 裡，不會上傳 GitHub。
 
 ## 元大 Spark API（第四艙、盤中模式）

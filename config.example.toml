@@ -1,8 +1,6 @@
 # 複製成 config.local.toml 後再修改。config.local.toml 不會上傳 GitHub。
 
 [radar]
-total_capital = 1170000      # 總資金（元）
-max_risk_pct = 0.05          # 單檔最大曝險比例
 history_trading_days = 90    # 資料庫保留的交易日數
 request_interval_sec = 3.0   # 對官方網站請求的間隔秒數
 # db_path = "data/radar.db"

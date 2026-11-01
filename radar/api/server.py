@@ -112,9 +112,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/health")
     def health():
         return {"time": datetime.now().isoformat(timespec="seconds"), "db": engine.health(),
-                "settings": {"total_capital": settings.total_capital, "max_risk_pct": settings.max_risk_pct,
-                             "max_exposure": settings.max_exposure,
-                             "history_trading_days": settings.history_trading_days},
+                "settings": {"history_trading_days": settings.history_trading_days},
                 "update": engine.update_job}
 
     @app.get("/api/stocks")
@@ -198,8 +196,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"code": code, "name": names.get(code, ""), "market": cache["markets"].get(code, ""),
                 "candles": candles, "ma5": series(ma[5]), "ma20": series(ma[20]), "ma60": series(ma[60]),
                 "bb_upper": series(ma[20] + 2 * std20), "bb_lower": series(ma[20] - 2 * std20),
-                "metrics": metrics,
-                "max_buy_lots": int(settings.max_exposure // (close.iloc[-1] * 1000)) if close.iloc[-1] else 0}
+                "metrics": metrics}
 
     @app.get("/api/stock/{code}/defense")
     def defense(code: str, cost: float, shares: int, fee_discount: float = 1.0):
@@ -208,8 +205,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if g.empty:
             raise HTTPException(404, f"資料庫裡沒有 {code}")
         try:
-            return defense_evaluate(cost, shares, g["close"], fee_discount,
-                                    max_exposure=settings.max_exposure)
+            return defense_evaluate(cost, shares, g["close"], fee_discount)
         except ValueError as e:
             raise HTTPException(400, str(e))
 

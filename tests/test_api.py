@@ -37,7 +37,7 @@ def client(tmp_path):
 def test_health_and_stocks(client):
     h = client.get("/api/health").json()
     assert h["db"]["trading_days"] == 70 and h["db"]["stocks"] == 3
-    assert h["settings"]["max_exposure"] == pytest.approx(58500)
+    assert "total_capital" not in h["settings"]
     codes = {s["code"]: s["market"] for s in client.get("/api/stocks").json()}
     assert codes == {"1101": "TWSE", "6488": "TPEX", "9999": "TWSE"}
 
@@ -66,7 +66,7 @@ def test_stock_and_defense(client):
     assert client.get("/api/stock/0000").status_code == 404
     d = client.get("/api/stock/6488/defense", params={"cost": 450, "shares": 100}).json()
     assert d["roi_pct"] < -15 and d["verdict"]["level"] == "danger"
-    assert d["exposure"]["over"] is False
+    assert "exposure" not in d and "max_buy_lots" not in s
 
 
 def test_static_index(client):

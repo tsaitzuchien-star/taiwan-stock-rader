@@ -103,8 +103,9 @@ function Overview({ health, breadth }) {
       <div class="panel pb kpi"><div class="label">漲停 / 跌停</div>
         <div class="value"><span class="up">${breadth?.limit_up ?? '—'}</span> <span class="mut">/</span> <span class="dn">${breadth?.limit_down ?? '—'}</span></div>
         <div class="subv mut">漲跌幅 ≥ 9.5%</div></div>
-      <div class="panel pb kpi"><div class="label">單檔曝險上限</div><div class="value">${fmt(health?.settings.max_exposure, 0)}</div>
-        <div class="subv mut">總資金 ${fmt(health?.settings.total_capital, 0)} × ${fmt((health?.settings.max_risk_pct || 0) * 100, 0)}%</div></div>
+      <div class="panel pb kpi"><div class="label">站上季線比例</div>
+        <div class="value">${breadth?.above_ma60_pct == null ? '—' : fmt(breadth.above_ma60_pct, 1) + '%'}</div>
+        <div class="subv mut">收盤 ≥ 60 日均線</div></div>
     </section>
     ${err && html`<div class="toast">${err}</div>`}
     <section class="grid g-2">
@@ -142,7 +143,7 @@ function Overview({ health, breadth }) {
       </div>
       <div class="panel">
         <div class="ph">即時警示<span class="sub">持倉＋自選</span></div>
-        <div class="empty">接上元大即時報價後，跌破季線、爆量、曝險超限等事件會在這裡即時跳出（第二批）。</div>
+        <div class="empty">接上元大即時報價後，跌破季線、爆量等事件會在這裡即時跳出（第二批）。</div>
       </div>
     </section>`;
 }
@@ -329,8 +330,6 @@ function Defense({ code, price, health }) {
       <div class="kv"><span class="mut">開盤直接跌停</span><span class="num">${fmt(res.limit_down_price)} → <span class=${cls(res.limit_down_pl)}>${signed(res.limit_down_pl, 0)}</span></span></div>
       <div class="kv"><span class="mut">季線防線</span><span class="num">${fmt(res.ma60)} · 乖離 ${signed(res.bias_ma60_pct, 1, '%')}</span></div>
       ${res.escape_weak && html`<div class="kv"><span class="mut">反彈逃命點</span><span class="num">10日線 ${fmt(res.escape_weak)} · 20日線 ${fmt(res.escape_strong)}</span></div>`}
-      ${res.exposure && html`<div class="kv"><span class="mut">單檔曝險</span><span class=${`num ${res.exposure.over ? 'up' : ''}`}>
-        市值 ${fmt(res.exposure.market_value, 0)} / 上限 ${fmt(res.exposure.limit, 0)}${res.exposure.over ? `（${fmt(res.exposure.ratio, 1)} 倍）` : ''}</span></div>`}
       <div class=${`verdict ${v.level}`} style="margin-top:12px"><h3>裁決：${v.title}</h3>${v.text}</div>
     </div>`}
   </div>`;
@@ -363,7 +362,6 @@ function Stock({ code, stocks, health }) {
           <span><span class="mut">高</span> <span class="num">${fmt(last.high)}</span></span>
           <span><span class="mut">低</span> <span class="num">${fmt(last.low)}</span></span>
           <span><span class="mut">量</span> <span class="num">${fmt(last.volume, 0)} 張</span></span>
-          <span><span class="mut">最多可買</span> <span class="num">${data.max_buy_lots} 張</span></span>
         </div>
       </section>
       <div class="row">
@@ -393,7 +391,7 @@ function Stock({ code, stocks, health }) {
 // ---------------------------------------------------------------- 持倉（第二批）
 function Positions() {
   return html`<div class="panel"><div class="ph">持倉風控<span class="sub">元大帳務</span></div>
-    <div class="empty">這頁會接上元大：庫存、即時損益、季線防線、曝險檢查與已實現損益。<br />
+    <div class="empty">這頁會接上元大：庫存、即時損益、季線防線、與已實現損益。<br />
     元大正式環境測試通過後就會推出。現在可以先到 <a href="#/stock">個股分析</a> 用「持倉防禦約談」手動試算。</div></div>`;
 }
 
@@ -427,9 +425,6 @@ function Settings({ health, reload }) {
     <div class="panel">
       <div class="ph">個人設定<span class="sub">config.local.toml</span></div>
       <div style="padding:4px 16px 16px">
-        <div class="kv"><span class="mut">總資金</span><span class="num">${fmt(s?.total_capital, 0)}</span></div>
-        <div class="kv"><span class="mut">單檔曝險比例</span><span class="num">${fmt((s?.max_risk_pct || 0) * 100, 1)}%</span></div>
-        <div class="kv"><span class="mut">單檔曝險上限</span><span class="num">${fmt(s?.max_exposure, 0)}</span></div>
         <div class="kv"><span class="mut">資料庫保留交易日</span><span class="num">${s?.history_trading_days ?? '—'}</span></div>
         <div class="mut" style="font-size:12px;margin-top:12px;line-height:1.7">要修改請用記事本編輯專案資料夾的 config.local.toml，存檔後重新啟動戰情室。</div>
       </div>
