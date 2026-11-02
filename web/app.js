@@ -166,7 +166,7 @@ function Overview({ health, breadth }) {
         </div>
       </div>
       <div class="panel">
-        <div class="ph">四大戰術命中<span class="sub">全市場</span></div>
+        <div class="ph">戰術命中<span class="sub">全市場</span></div>
         <div class="pb" style="display:flex;flex-direction:column;gap:12px;font-size:13px">
           ${(summary || []).map((s) => html`<a href=${`#/radar/${s.id}`} style="display:flex;align-items:center;gap:10px;color:var(--text)">
             <span style="flex:0 0 84px">${s.name}</span>
@@ -713,7 +713,8 @@ function Radar({ initialTactic, health }) {
           ${num('p', '股價上限（元）', 1)}${num('v', '月均量上限（張）', 10)}
           ${num('tv', '今日成交下限（張）', 50)}${num('pm', '量能爆發（倍）', 0.1)}
         </div>
-        <div>${chk('sqz', '布林帶寬 ≤ 15%')}${chk('ma', '月季線糾結 ≤ 3%')}${chk('gap', '跳空開高 ≥ 2%')}${chk('wash', '極端洗盤換手')}</div>
+        <div>${chk('sqz', '布林帶寬 ≤ 15%')}${chk('ma', '月季線糾結 ≤ 3%')}${chk('gap', '跳空開高 ≥ 2%')}${chk('wash', '極端洗盤換手')}
+          ${chk('lu', '近 3 日有漲停、今天收高檔')}${chk('nh', '收盤創 60 日新高')}${chk('base', '發動前有盤整、還沒漲一大段')}</div>
         <button type="button" class="btn" disabled=${busy} onClick=${() => run({ tactic, params })}>${busy ? '掃描中…' : '掃描全市場'}</button>
         ${res && html`<div class="mut" style="font-size:12px;line-height:1.7">資料日期 <span class="num">${res.latest}</span>，
           計算 <span class="num">${res.universe.toLocaleString()}</span> 檔，耗時 <span class="num">${res.elapsed}</span> 秒；

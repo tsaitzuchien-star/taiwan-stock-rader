@@ -10,6 +10,7 @@ COLUMNS = [
     '今日成交(張)', '月量爆發倍數', '多空力道', '成長K線', '跳空缺口(%)', '布林帶寬(%)',
     '均線糾結(%)', '季線位置', '強力洗盘訊號', '_is_fake', '_is_washout',
     '季線乖離(%)', '20日漲幅(%)', '前期布林寬(%)', '_close_pos',
+    '近3日漲停(次)', '_new_high60',
 ]
 
 
@@ -55,6 +56,12 @@ def stock_metrics(code: str, name: str, df: pd.DataFrame) -> dict | None:
     pre_bw = 4 * float(pre.std()) / pre_mean * 100 if pre_mean > 0 else 999
     close_pos = (close_p - low_p) / range_hl if range_hl > 0 else 0.5
 
+    # 妖股用：近 3 日漲停次數（漲幅 ≥ 9.5%）、收盤是否突破前 60 日最高價
+    chg = closes.pct_change() * 100
+    limit_up3 = int((chg.tail(3) >= 9.5).sum())
+    prior_high = float(df['High'].iloc[-61:-1].max())
+    new_high60 = bool(close_p >= prior_high)
+
     return {
         '股票代號': code,
         '股票名稱': name,
@@ -78,6 +85,8 @@ def stock_metrics(code: str, name: str, df: pd.DataFrame) -> dict | None:
         '20日漲幅(%)': round(ret20, 2),
         '前期布林寬(%)': round(pre_bw, 2),
         '_close_pos': round(close_pos, 3),
+        '近3日漲停(次)': limit_up3,
+        '_new_high60': new_high60,
     }
 
 

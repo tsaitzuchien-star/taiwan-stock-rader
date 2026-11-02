@@ -114,3 +114,30 @@ def test_scan_rows_have_entry_score(client):
     for row in r["rows"]:
         assert 0 <= row["entry"] <= 100 and row["light"] in ("green", "yellow", "red")
         assert set(row["entry_parts"]) == {"pos", "brk", "base", "chip"} and len(row["reasons"]) == 4
+
+
+def test_monster_tactic_finds_base_breakout_limit_up(tmp_path):
+    """妖股獵人：久盤 60 天後漲停創新高、爆量收最高 → 要抓到；已經漲一大段的不要。"""
+    db = tmp_path / "radar.db"
+    store = Store(db)
+    store.upsert_stocks([("3001", "久盤股", "TPEX"), ("3002", "噴過股", "TPEX")])
+    days = pd.bdate_range("2026-07-01", periods=70)
+    rows = []
+    for i, d in enumerate(days):
+        ds = d.date().isoformat()
+        if i < 69:
+            c = 20.0 + (i % 2) * 0.2
+            rows.append(("3001", ds, c, c + 0.2, c - 0.2, c, 300_000))
+            c2 = 10.0 * (1.03 ** i)          # 一路大漲
+            rows.append(("3002", ds, c2, c2 * 1.01, c2 * 0.99, c2, 300_000))
+        else:
+            rows.append(("3001", ds, 20.3, 22.2, 20.3, 22.2, 3_000_000))
+            c2 = 10.0 * (1.03 ** 68) * 1.1
+            rows.append(("3002", ds, c2 / 1.1, c2, c2 / 1.1, c2, 3_000_000))
+    store.upsert_bars(rows)
+    store.close()
+    c = TestClient(create_app(Settings(db_path=db)))
+    assert any(t["id"] == "monster" for t in c.get("/api/tactics").json())
+    r = c.post("/api/scan", json={"tactic": "monster", "params": {"p": 1000}}).json()
+    assert [x["code"] for x in r["rows"]] == ["3001"]
+    assert [x["code"] for x in c.post("/api/scan", json={"tactic": "monster_hi"}).json()["rows"]] == ["3001"]
