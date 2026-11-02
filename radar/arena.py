@@ -87,11 +87,21 @@ class Arena:
                               (json.dumps(state, ensure_ascii=False),))
         self._nav_rows, self._trade_rows = [], []
 
-    def reset(self) -> None:
+    def reset(self, fresh: bool = False) -> None:
+        """清掉成績。fresh=True：不回測，100 萬從資料庫最新交易日收盤開始（下一個交易日開盤第一次買進）。"""
         with self.conn:
             self.conn.execute("DELETE FROM arena_state")
             self.conn.execute("DELETE FROM arena_nav")
             self.conn.execute("DELETE FROM arena_trades")
+        days = self.store.trading_days()
+        if fresh and len(days) > MIN_HISTORY:
+            self._put_state({"start": days[-1], "live_after": days[-2], "last": None, "fresh": True,
+                             "cash": START_CASH, "positions": {}, "orders": [], "bench_base": None})
+
+    def _put_state(self, state: dict) -> None:
+        with self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO arena_state(k, v) VALUES('state', ?)",
+                              (json.dumps(state, ensure_ascii=False),))
 
     # ------------------------------------------------------------ 主流程
     def pending(self) -> bool:
@@ -316,7 +326,7 @@ class Arena:
         positions.sort(key=lambda x: -x["value"])
         return _clean({
             "name": NAME, "rules": RULES, "start_cash": START_CASH, "ready": True,
-            "start": st["start"], "live_after": st["live_after"],
+            "start": st["start"], "live_after": st["live_after"], "fresh": bool(st.get("fresh")),
             "live_since": live.iloc[0]["date"] if not live.empty else None, "last": st["last"],
             "nav": last["nav"], "cash": st["cash"], "total_ret": total, "bench_total": bench_total,
             "excess": excess, "live_ret": live_ret, "mdd": mdd, "grade": _grade(excess, mdd),

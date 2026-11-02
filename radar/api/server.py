@@ -153,11 +153,11 @@ class Engine:
         rep["error"] = self.arena_job.get("error")
         return rep
 
-    def arena_reset(self) -> dict:
+    def arena_reset(self, fresh: bool = False) -> dict:
         if self.arena_job.get("running"):
             raise HTTPException(409, "擂台正在計算中，請稍後再試")
         with self.lock:
-            radar_arena.Arena(self.store).reset()
+            radar_arena.Arena(self.store).reset(fresh=fresh)
         return self.arena_report()
 
 
@@ -449,8 +449,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return engine.arena_report()
 
     @app.post("/api/arena/reset")
-    def arena_reset():
-        return engine.arena_reset()
+    def arena_reset(fresh: bool = False):
+        return engine.arena_reset(fresh=fresh)
 
     @app.post("/api/db/update")
     def db_update():
