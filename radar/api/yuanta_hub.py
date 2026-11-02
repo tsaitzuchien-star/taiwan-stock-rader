@@ -16,6 +16,7 @@ from ..config import Settings
 from ..yuanta.client import YuantaClient, YuantaConfig, YuantaError
 
 HOLDINGS_TTL = 20.0
+MARKET_TTL = 60.0          # 全市場即時快照最多每分鐘更新一次（約 4 次查詢，遠低於元大限制）
 
 
 def mask(acct: str) -> str:
@@ -34,6 +35,9 @@ class YuantaHub:
         self._holdings: pd.DataFrame | None = None
         self._holdings_at = 0.0
         self.holdings_time: str | None = None
+        self._market_at = 0.0
+        self.market_time: str | None = None
+        self._market_busy = threading.Lock()
 
     # ---------------------------------------------------------------- 狀態
     @property
@@ -112,6 +116,30 @@ class YuantaHub:
             return {}
         with c._lock:
             return {k: dict(v) for k, v in c.quotes.items()}
+
+    # ---------------------------------------------------------------- 全市場即時快照
+    def refresh_market(self, pairs: list[tuple[str, str]], background: bool = True) -> None:
+        """每分鐘最多一次：用元大報價表查詢抓全市場現價（盤中漲跌家數用）。"""
+        if not self.logged_in or not pairs or time.monotonic() - self._market_at < MARKET_TTL:
+            return
+        if not self._market_busy.acquire(blocking=False):
+            return
+
+        def run():
+            try:
+                self.client.snapshot(pairs)
+                self._market_at = time.monotonic()
+                self.market_time = time.strftime("%H:%M:%S")
+            except Exception as e:  # noqa: BLE001
+                self._market_at = time.monotonic()   # 失敗也等一分鐘再試，避免狂打元大
+                if self.client:
+                    self.client.messages.append(f"全市場報價更新失敗：{e}")
+            finally:
+                self._market_busy.release()
+        if background:
+            threading.Thread(target=run, daemon=True).start()
+        else:
+            run()
 
     def realized(self, days: int) -> pd.DataFrame:
         end = date.today()

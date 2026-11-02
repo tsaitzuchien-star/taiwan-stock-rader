@@ -127,3 +127,27 @@ def test_not_configured(tmp_path):
     assert not c.get("/api/yuanta/status").json()["configured"]
     r = c.post("/api/yuanta/connect")
     assert r.status_code == 502 and "config.local.toml" in r.json()["detail"]
+
+
+def test_live_breadth_from_yuanta(client, monkeypatch):
+    import time as _t
+    from datetime import datetime as real_dt
+
+    import radar.api.server as srv
+
+    class FakeNow(real_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return real_dt(2026, 11, 2, 10, 15)   # 週一盤中，資料庫還沒有今天
+    monkeypatch.setattr(srv, "datetime", FakeNow)
+    assert client.get("/api/market/breadth").json()["live"] is False   # 還沒連元大：用盤後資料
+    client.post("/api/yuanta/connect")
+    b = client.get("/api/market/breadth").json()
+    for _ in range(50):
+        if b["live"]:
+            break
+        _t.sleep(0.05)
+        b = client.get("/api/market/breadth").json()
+    assert b["live"] and b["latest"] == "2026-11-02" and not b["closed"]
+    assert b["up"] == 1 and b["down"] == 1 and b["count"] == 2   # 2330 漲、6488 跌
+    assert b["above_ma60_pct"] == 50.0

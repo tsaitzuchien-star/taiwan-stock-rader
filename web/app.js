@@ -57,7 +57,9 @@ function TopBar({ health, breadth }) {
     <div class="brand">台股雷達<small>V12 戰情室</small></div>
     <div class="ticker">
       ${breadth?.latest && html`
-        <span><span class="mut">資料日期</span> <b class="num">${breadth.latest}</b></span>
+        ${breadth.live ? html`<span class="chip live" title=${`元大即時報價 ${breadth.count} 檔 · ${breadth.time || ''} 更新；盤後資料庫最新 ${breadth.db_latest}`}>
+            ${breadth.closed ? '今日收盤' : '盤中即時'} <b class="num">${(breadth.time || '').slice(0, 5)}</b></span>`
+          : html`<span><span class="mut">資料日期</span> <b class="num">${breadth.latest}</b></span>`}
         <span><span class="mut">上漲</span> <b class="num up">${breadth.up}</b></span>
         <span><span class="mut">下跌</span> <b class="num dn">${breadth.down}</b></span>
         <span><span class="mut">站上季線</span> <b class="num">${fmt(breadth.above_ma60_pct, 1)}%</b></span>`}
@@ -117,8 +119,9 @@ function Overview({ health, breadth }) {
   const total = breadth ? breadth.up + breadth.down + breadth.flat : 0;
   return html`
     <section class="grid g-kpi">
-      <div class="panel pb kpi"><div class="label">資料日期</div><div class="value">${breadth?.latest || '—'}</div>
-        <div class="subv mut">官方盤後資料</div></div>
+      <div class="panel pb kpi"><div class="label">${breadth?.live ? (breadth.closed ? '今日收盤（元大）' : '盤中即時（元大）') : '資料日期'}</div>
+        <div class="value">${breadth?.live ? (breadth.time || '').slice(0, 5) : breadth?.latest || '—'}</div>
+        <div class="subv mut">${breadth?.live ? `${breadth.latest} · ${breadth.count} 檔每分鐘更新` : '官方盤後資料'}</div></div>
       <div class="panel pb kpi"><div class="label">上漲 / 下跌家數</div>
         <div class="value"><span class="up">${breadth?.up ?? '—'}</span> <span class="mut">/</span> <span class="dn">${breadth?.down ?? '—'}</span></div>
         <div class="subv mut">平盤 ${breadth?.flat ?? '—'}</div></div>
@@ -1064,6 +1067,12 @@ function App() {
     api('/api/stocks').then(setStocks).catch(() => {});
   };
   useEffect(load, []);
+  useEffect(() => {   // 元大連線時，大盤數字每分鐘更新（盤中即時）
+    const loadB = () => { if (!document.hidden) api('/api/market/breadth').then(setBreadth).catch(() => {}); };
+    const t = setInterval(loadB, 30000);
+    addEventListener('yuanta', loadB);
+    return () => { clearInterval(t); removeEventListener('yuanta', loadB); };
+  }, []);
   let body;
   switch (page) {
     case 'arena': body = html`<${ArenaPage} health=${health} />`; break;

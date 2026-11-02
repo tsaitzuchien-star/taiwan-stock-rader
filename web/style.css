@@ -220,3 +220,4 @@ td small { color: var(--muted); }
 i.live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--down); margin-left: 6px; vertical-align: middle; }
 a.chip { text-decoration: none; }
 .msgs summary { cursor: pointer; list-style: none; }
+.chip.live { background: #2A1F0E; color: var(--accent); }
