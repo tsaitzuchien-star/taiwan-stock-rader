@@ -230,7 +230,7 @@ class Arena:
             budget = nav / MAX_POSITIONS
             for code, r in c.head(slots).iterrows():
                 orders.append({"side": "buy", "code": code, "name": r["name"], "budget": budget,
-                               "score": round(float(r["score"]), 1),
+                               "score": round(float(r["score"]), 1), "why": _why(r, len(rows)),
                                "reason": f"評分 {r['score']:.0f}" + (f"・{'、'.join(r['tags'][:3])}" if r["tags"] else "")})
         return orders
 
@@ -274,7 +274,9 @@ class Arena:
             return
         st["cash"] -= amount + fee
         st["positions"][o["code"]] = {"name": o["name"], "shares": shares, "avg": (amount + fee) / shares,
-                                      "cost": amount + fee, "entry": d, "last": px, "peak": px, "days": 0}
+                                      "cost": amount + fee, "entry": d, "last": px, "peak": px, "days": 0,
+                                      "entry_price": px, "entry_fee": fee, "why": o.get("why", []),
+                                      "reason": o.get("reason", "")}
         self._trade(d, o["code"], o["name"], "buy", shares, px, amount, fee, 0, None, None, o["reason"])
 
     def _trade(self, *row):
@@ -317,8 +319,14 @@ class Arena:
             live_ret = (last["nav"] / base_nav - 1) * 100
         excess = total - bench_total if bench_total is not None else None
         positions = []
+        buys = trades[trades["side"] == "buy"].drop_duplicates("code") if not trades.empty else trades
+        buy_of = {r.code: r for r in buys.itertuples()} if not buys.empty else {}
         for code, p in st["positions"].items():
-            positions.append({"code": code, "name": p["name"], "shares": p["shares"], "avg": p["avg"],
+            t = buy_of.get(code)
+            positions.append({
+                              "entry_price": p.get("entry_price", t.price if t is not None else None),
+                              "entry_fee": p.get("entry_fee", t.fee if t is not None else None),
+                              "why": p.get("why") or [], "reason": p.get("reason") or (t.reason if t is not None else ""),"code": code, "name": p["name"], "shares": p["shares"], "avg": p["avg"],
                               "last": p["last"], "value": p["last"] * p["shares"],
                               "pnl": p["last"] * p["shares"] - p["cost"], "pnl_pct": (p["last"] / p["avg"] - 1) * 100,
                               "entry": p["entry"], "days": p["days"],
@@ -337,6 +345,40 @@ class Arena:
             "positions": positions, "orders": st.get("orders", []),
             "recent_trades": json.loads(trades.head(60).to_json(orient="records", force_ascii=False)),
         })
+
+
+def _why(r, universe: int) -> list[str]:
+    """買進理由（白話）：評分、四因子、法人動向、營收、技術面。"""
+    def n(k):
+        v = r.get(k) if hasattr(r, "get") else None
+        return None if v is None or (isinstance(v, float) and math.isnan(v)) else float(v)
+    out = [f"法人綜合評分 {n('score'):.0f} 分，全市場第 {int(n('rank') or 0)} 名（共 {universe} 檔）" if n("rank")
+           else f"法人綜合評分 {n('score'):.0f} 分",
+           f"四因子：籌碼 {n('s_chip'):.0f}、動能 {n('s_momentum'):.0f}、成長 {n('s_growth'):.0f}、估值 {n('s_value'):.0f}（滿分 100）"]
+    chips = []
+    if n("f5") is not None:
+        chips.append(f"外資近 5 日{'買' if n('f5') >= 0 else '賣'}超 {abs(n('f5')):,.0f} 張")
+    if n("t5") is not None and n("t5") != 0:
+        chips.append(f"投信近 5 日{'買' if n('t5') > 0 else '賣'}超 {abs(n('t5')):,.0f} 張")
+    if n("legal5_ratio") is not None:
+        chips.append(f"法人買超佔成交量 {n('legal5_ratio'):.1f}%")
+    if chips:
+        out.append("籌碼：" + "，".join(chips))
+    if n("yoy") is not None:
+        out.append(f"營收：最新月營收年增 {n('yoy'):+.1f}%" + (f"、月增 {n('mom'):+.1f}%" if n("mom") is not None else ""))
+    tech = []
+    if n("dist_ma60") is not None:
+        tech.append(f"站上季線 {n('dist_ma60'):+.1f}%")
+    if n("ret20") is not None:
+        tech.append(f"近 20 日漲跌 {n('ret20'):+.1f}%")
+    if n("vol20") is not None:
+        tech.append(f"月均量 {n('vol20'):,.0f} 張")
+    if tech:
+        out.append("技術面：" + "，".join(tech))
+    tags = r.get("tags") if hasattr(r, "get") else None
+    if tags:
+        out.append("訊號：" + "、".join(tags))
+    return out
 
 
 def _clean(x):

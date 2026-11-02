@@ -221,3 +221,7 @@ i.live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; bac
 a.chip { text-decoration: none; }
 .msgs summary { cursor: pointer; list-style: none; }
 .chip.live { background: #2A1F0E; color: var(--accent); }
+tr.why td { white-space: normal; background: var(--bar); padding: 10px 14px 12px; border-bottom: 1px solid var(--line); line-height: 1.7; }
+.buyline { color: var(--text-2); font-size: 13px; }
+.buyline b { color: var(--text); font-weight: 600; }
+.whylist { margin: 4px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; line-height: 1.8; white-space: normal; }

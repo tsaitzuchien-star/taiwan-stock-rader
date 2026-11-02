@@ -333,7 +333,14 @@ function ArenaPage({ health }) {
             <td class="num">${p.shares.toLocaleString()}</td><td class="num">${fmt(p.avg, 2)}</td><td class="num">${fmt(p.last, 2)}</td>
             <td class="num">${won(p.value)}</td>
             <td class=${`num ${cls(p.pnl)}`}>${signed(p.pnl, 0)}<br /><small>${signed(p.pnl_pct, 1, '%')}</small></td>
-            <td class="num mut">${fmt(p.weight, 1)}%</td><td class="num mut">${p.days} 日</td></tr>`)}</tbody>
+            <td class="num mut">${fmt(p.weight, 1)}%</td><td class="num mut">${p.days} 日</td></tr>
+            <tr class="why nohover"><td colspan="8" class="l">
+              <div class="buyline">📌 <b>${p.entry}</b> 09:00 開盤以 <b class="num">${fmt(p.entry_price, 2)}</b> 元買進
+                <b class="num">${p.shares.toLocaleString()}</b> 股（${p.shares >= 1000 ? `${Math.floor(p.shares / 1000)} 張${p.shares % 1000 ? ` ${p.shares % 1000} 股` : ''}` : '零股'}），
+                花費 <b class="num">${won(p.entry_price * p.shares + (p.entry_fee || 0))}</b> 元（含手續費）</div>
+              ${p.why?.length ? html`<ul class="whylist">${p.why.map((w) => html`<li>${w}</li>`)}</ul>`
+                : html`<div class="mut">買進理由：${p.reason}</div>`}
+            </td></tr>`)}</tbody>
         </table></div>`}
       </div>
       <div class="panel">
@@ -342,7 +349,8 @@ function ArenaPage({ health }) {
           <thead><tr><th class="l">動作</th><th class="l">股票</th><th class="l">理由</th><th>預計金額</th></tr></thead>
           <tbody>${a.orders.map((o) => html`<tr onClick=${() => go(o.code)}>
             <td class="l"><span class=${`tag ${o.side === 'buy' ? 'up' : 'dn'}`}>${o.side === 'buy' ? '買進' : '賣出'}</span></td>
-            <td class="l"><span class="num acc">${o.code}</span> ${o.name}</td><td class="l mut">${o.reason}</td>
+            <td class="l"><span class="num acc">${o.code}</span> ${o.name}</td>
+            <td class="l mut">${o.why?.length ? html`<ul class="whylist">${o.why.map((w) => html`<li>${w}</li>`)}</ul>` : o.reason}</td>
             <td class="num">${o.side === 'buy' ? won(o.budget) : '全部'}</td></tr>`)}</tbody>
         </table></div>`}
       </div>
