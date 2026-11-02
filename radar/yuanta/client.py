@@ -244,6 +244,7 @@ class YuantaClient:
         self._handler = None                    # 保留 .NET 委派的參考，避免被回收
         self.log_dir: Path | None = None
         self._last_login_fail = 0.0
+        self.cert_error: str | None = None      # 元大回「加簽失敗 / 憑證異常」：重試也沒用，不要再登入
 
     # ---------- 事件 ----------
     def _note(self, text: str) -> None:
@@ -284,6 +285,8 @@ class YuantaClient:
                 self.suspended_until = float("inf")
             if idx == 10:
                 self.logged_in = False
+            if idx == 9:
+                self.cert_error = text
             if name in self._pending:
                 self._finish(name, error=text)
             elif idx in (3, 4, 9, 10, 11, 13, 14):
@@ -405,6 +408,7 @@ class YuantaClient:
             else:
                 invoke = lambda: self._api.Login(c.account, c.password)  # noqa: E731
             result = None
+            self.cert_error = None
             for attempt in range(1, LOGIN_TRIES + 1):
                 try:
                     result = self._request("Login", invoke, interval=0, need_login=False)
@@ -412,8 +416,16 @@ class YuantaClient:
                 except YuantaError as e:
                     rejected = "回傳 False" in str(e)
                     if rejected and attempt < LOGIN_TRIES:
-                        self._note(f"Login 元件回傳 False，{CONNECT_SETTLE:.0f} 秒後重試（第 {attempt} 次）")
                         time.sleep(CONNECT_SETTLE)
+                    if self.cert_error:
+                        # 憑證有問題時再登入只會被元大判定「登入過於頻繁」而暫停，甚至停權
+                        self._last_login_fail = time.monotonic()
+                        raise YuantaError(
+                            f"這台電腦的元大憑證有問題（{self.cert_error}），已停止重試以免被元大暫停。\n"
+                            "做法：在元大元件資料夾雙擊憑證檔（.pfx）→ 存放位置選「目前使用者」→ 輸入憑證密碼 → 一路下一步完成，\n"
+                            "      完成後關掉戰情室再重新開啟。") from e
+                    if rejected and attempt < LOGIN_TRIES:
+                        self._note(f"Login 元件回傳 False，已等 {CONNECT_SETTLE:.0f} 秒，重試（第 {attempt} 次）")
                         continue
                     self._last_login_fail = time.monotonic()
                     if rejected:
