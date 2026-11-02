@@ -233,3 +233,10 @@ tr.why td { white-space: normal; background: var(--bar); padding: 10px 14px 12px
 .entry.yellow b { color: var(--accent); }
 .entry.red b { color: var(--up); }
 .eparts { font-size: 10.5px; color: var(--muted); white-space: nowrap; margin-top: 2px; }
+
+/* 觀察名單 */
+.wbtn { background: transparent; border: 1px solid var(--line-strong); color: var(--text-2); border-radius: 4px;
+  padding: 4px 8px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.wbtn:hover { border-color: var(--accent); color: var(--accent); }
+.wbtn.on { border-color: var(--accent); color: var(--accent); cursor: default; }
+tr.tot td { font-weight: 700; border-top: 1px solid var(--line-strong); }

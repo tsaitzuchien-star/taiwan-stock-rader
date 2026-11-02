@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from .. import alpha as radar_alpha
 from .. import arena as radar_arena
 from .. import entry as radar_entry
+from .. import watch as radar_watch
 from .. import collect as radar_collect
 from .. import positions as radar_positions
 from ..config import ROOT, Settings, load_settings
@@ -173,6 +174,12 @@ class Engine:
 class ScanRequest(BaseModel):
     tactic: str | None = None
     params: dict | None = None
+
+
+class WatchRequest(BaseModel):
+    code: str
+    source: str | None = None
+    note: str | None = None
 
 
 def df_records(df: pd.DataFrame) -> list[dict]:
@@ -470,6 +477,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return radar_arena._clean(radar_positions.realized_summary(engine.yuanta.realized(min(max(days, 1), 365))))
         except YuantaError as e:
             raise HTTPException(409 if not engine.yuanta.logged_in else 502, str(e)) from e
+
+    # ---------------------------------------------------------------- 觀察名單
+    @app.get("/api/watch")
+    def watch_list():
+        cache = engine.metrics()
+        with engine.lock:
+            return radar_watch.Watch(engine.store).report(cache["bars"])
+
+    @app.post("/api/watch")
+    def watch_add(req: WatchRequest):
+        cache = engine.metrics()
+        row = cache["df"][cache["df"]["股票代號"] == req.code]
+        if row.empty:
+            raise HTTPException(404, f"{req.code} 最新一日沒有資料，無法記錄")
+        m = rows_json(row, cache, engine.alpha_lookup())[0]
+        item = {"code": m["code"], "name": m["name"], "added_date": cache["latest"], "price": m["price"],
+                "entry": m["entry"], "parts": m["entry_parts"], "stage": m["stage"], "light": m["light"],
+                "source": (req.source or "手動").strip()[:20], "note": req.note}
+        with engine.lock:
+            item["id"] = radar_watch.Watch(engine.store).add(item)
+        return item
+
+    @app.delete("/api/watch/{wid}")
+    def watch_remove(wid: int):
+        with engine.lock:
+            if not radar_watch.Watch(engine.store).remove(wid):
+                raise HTTPException(404, "找不到這筆觀察")
+        return {"ok": True}
 
     @app.get("/api/arena")
     def arena():
