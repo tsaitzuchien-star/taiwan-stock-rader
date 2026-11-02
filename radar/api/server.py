@@ -12,12 +12,13 @@ from pathlib import Path
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .. import alpha as radar_alpha
 from .. import arena as radar_arena
+from .. import arena_journal as radar_journal
 from .. import entry as radar_entry
 from .. import trust as radar_trust
 from .. import watch as radar_watch
@@ -162,6 +163,7 @@ class Engine:
             store = Store(self.settings.db_path)   # 自己的連線，不卡住畫面查詢
             try:
                 radar_arena.Arena(store).run()
+                self.arena_export(store)
             except Exception as e:  # noqa: BLE001
                 self.arena_job["error"] = str(e)
             finally:
@@ -170,19 +172,46 @@ class Engine:
                 self._arena_lock.release()
         threading.Thread(target=run, daemon=True).start()
 
+    def arena_export(self, store=None) -> None:
+        """每日日誌、週報、CSV 自動存到 data/擂台紀錄（存檔失敗不影響擂台）。"""
+        try:
+            if store is None:
+                with self.lock:
+                    path = radar_journal.export(self.store, radar_journal.log_dir(self.settings))
+            else:
+                path = radar_journal.export(store, radar_journal.log_dir(self.settings))
+            self.arena_job.update({"log_dir": str(path) if path else None, "export_error": None})
+        except Exception as e:  # noqa: BLE001
+            self.arena_job["export_error"] = str(e)
+
     def arena_report(self) -> dict:
         self.arena_refresh()
+        if not self.arena_job.get("running") and "log_dir" not in self.arena_job:
+            self.arena_export()
         with self.lock:
             rep = radar_arena.Arena(self.store).report()
         rep["running"] = self.arena_job.get("running", False)
         rep["error"] = self.arena_job.get("error")
+        rep["log_dir"] = self.arena_job.get("log_dir")
+        rep["export_error"] = self.arena_job.get("export_error")
         return rep
+
+    def arena_journal(self, kind: str, key: str | None):
+        if self.arena_job.get("running"):
+            return {"ready": False, "running": True}
+        with self.lock:
+            j = radar_journal.Journal(self.store)
+            out = j.day(key) if kind == "day" else j.week(key)
+            if kind == "day" and out.get("ready"):
+                out["days"] = list(reversed(j.days))
+        return radar_arena._clean(out)
 
     def arena_reset(self, fresh: bool = False) -> dict:
         if self.arena_job.get("running"):
             raise HTTPException(409, "擂台正在計算中，請稍後再試")
         with self.lock:
             radar_arena.Arena(self.store).reset(fresh=fresh)
+        self.arena_job.pop("log_dir", None)
         return self.arena_report()
 
 
@@ -528,6 +557,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/arena")
     def arena():
         return engine.arena_report()
+
+    @app.get("/api/arena/journal")
+    def arena_journal(date: str | None = None):
+        return engine.arena_journal("day", date)
+
+    @app.get("/api/arena/week")
+    def arena_week(start: str | None = None):
+        return engine.arena_journal("week", start)
+
+    @app.get("/api/arena/week.md")
+    def arena_week_md(start: str | None = None):
+        w = engine.arena_journal("week", start)
+        name = f"擂台週報_{w.get('start', '')}.md"
+        from urllib.parse import quote
+        return Response(radar_journal.week_md(w), media_type="text/markdown; charset=utf-8",
+                        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
+
+    @app.get("/api/arena/day.md")
+    def arena_day_md(date: str | None = None):
+        j = engine.arena_journal("day", date)
+        from urllib.parse import quote
+        return Response(radar_journal.day_md(j), media_type="text/markdown; charset=utf-8",
+                        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote('擂台日誌_' + str(j.get('date', '')) + '.md')}"})
 
     @app.post("/api/arena/reset")
     def arena_reset(fresh: bool = False):

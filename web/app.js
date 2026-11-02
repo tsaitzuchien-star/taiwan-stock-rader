@@ -269,6 +269,92 @@ function EquityChart({ curve }) {
   return html`<div class="chart eq" ref=${el}></div>`;
 }
 
+const lots = (n) => (n >= 1000 ? `${Math.floor(n / 1000)} 張${n % 1000 ? ` ${n % 1000} 股` : ''}` : `${n} 股`);
+
+function TradeRows({ rows, go, sell }) {
+  return html`<div class="tablewrap"><table>
+    <thead><tr><th class="l">股票</th><th>成交價</th><th>股數</th><th>金額</th>${sell ? html`<th>損益</th>` : html`<th>手續費</th>`}<th class="l">${sell ? '出場原因' : '買進理由'}</th></tr></thead>
+    <tbody>${rows.map((t) => html`<tr onClick=${() => go(t.code)}>
+      <td class="l"><span class="num acc">${t.code}</span> ${t.name}</td><td class="num">${fmt(t.price, 2)}</td>
+      <td class="num">${lots(t.shares)}</td><td class="num">${won(t.amount)}</td>
+      ${sell ? html`<td class=${`num ${cls(t.pnl)}`}>${signed(t.pnl, 0)} <small>${signed(t.pnl_pct, 1, '%')}</small></td>` : html`<td class="num mut">${won(t.fee)}</td>`}
+      <td class="l mut">${t.reason}</td></tr>`)}</tbody></table></div>`;
+}
+
+function ArenaJournal({ a, go }) {
+  const [d, setD] = useState(null);
+  const [day, setDay] = useState('');
+  useEffect(() => { api(`/api/arena/journal${day ? `?date=${day}` : ''}`).then(setD).catch(() => {}); }, [day, a?.last]);
+  if (!d?.ready) return null;
+  const sec = (t) => html`<h4 class="jh">${t}</h4>`;
+  return html`<div class="panel">
+    <div class="ph">每日交易日誌<span class="sub">
+      <button class="linkbtn" disabled=${!d.prev} onClick=${() => setDay(d.prev)}>◀ 前一天</button>
+      <select value=${d.date} onChange=${(e) => setDay(e.target.value)}>${d.days.map((x) => html`<option value=${x}>${x}</option>`)}</select>
+      <button class="linkbtn" disabled=${!d.next} onClick=${() => setDay(d.next)}>後一天 ▶</button>
+      · <a href=${`/api/arena/day.md?date=${d.date}`}>下載</a></span></div>
+    <div class="pb journal">
+      <div class="jsum"><span class=${`tag ${d.phase === '實戰' ? 'hot' : ''}`}>${d.phase}</span>
+        <b>${d.date}（週${d.weekday}）</b> 總資產 <b class="num">${won(d.nav)}</b>
+        · 今日 <b class=${`num ${cls(d.day_ret)}`}>${signed(d.day_ret, 2, '%')}</b>
+        · 0050 <span class=${`num ${cls(d.bench_ret)}`}>${signed(d.bench_ret, 2, '%')}</span>
+        · 已實現 <span class=${`num ${cls(d.realized)}`}>${signed(d.realized, 0)}</span> 元 · 費用 <span class="num">${won(d.fees)}</span> 元</div>
+      ${sec(`進場 ${d.buys.length} 筆（開盤買進）`)}
+      ${d.buys.length ? html`<${TradeRows} rows=${d.buys} go=${go} />` : html`<div class="mut">沒有買進。</div>`}
+      ${sec(`出場 ${d.sells.length} 筆（開盤賣出）`)}
+      ${d.sells.length ? html`<${TradeRows} rows=${d.sells} go=${go} sell />` : html`<div class="mut">沒有賣出。</div>`}
+      ${d.missed.length ? html`${sec('沒成交的委託')}<ul class="whylist">${d.missed.map((o) => html`<li>${o.side === 'buy' ? '買進' : '賣出'} ${o.code} ${o.name}：${o.status}</li>`)}</ul>` : ''}
+      ${sec(`收盤持股 ${d.holdings.length} / 8 檔`)}
+      ${d.holdings.length ? html`<div class="tablewrap"><table>
+        <thead><tr><th class="l">股票</th><th class="l">買進日</th><th>成本</th><th>收盤</th><th>股數</th><th>損益</th><th>持有</th><th>比重</th></tr></thead>
+        <tbody>${d.holdings.map((h) => html`<tr onClick=${() => go(h.code)}>
+          <td class="l"><span class="num acc">${h.code}</span> ${h.name}</td><td class="l num mut">${h.entry}</td>
+          <td class="num">${fmt(h.avg, 2)}</td><td class="num">${fmt(h.close, 2)}</td><td class="num">${lots(h.shares)}</td>
+          <td class=${`num ${cls(h.pnl)}`}>${signed(h.pnl, 0)} <small>${signed(h.pnl_pct, 1, '%')}</small></td>
+          <td class="num mut">${h.days} 日</td><td class="num mut">${fmt(h.weight, 1)}%</td></tr>`)}</tbody></table></div>`
+        : html`<div class="mut">空手。</div>`}
+      ${sec('收盤後決定（下一個交易日開盤執行）')}
+      ${d.decisions.length ? html`<ul class="whylist">${d.decisions.map((o) => html`<li>
+        <span class=${`tag ${o.side === 'buy' ? 'up' : 'dn'}`}>${o.side === 'buy' ? '買進' : '賣出'}</span>
+        <b>${o.code} ${o.name}</b> ${o.reason || ''} <span class="mut">${o.status ? `→ ${o.status}` : ''}</span></li>`)}</ul>`
+        : html`<div class="mut">不動作，持股續抱。</div>`}
+    </div></div>`;
+}
+
+function ArenaWeek({ a, go }) {
+  const [w, setW] = useState(null);
+  const [start, setStart] = useState('');
+  useEffect(() => { api(`/api/arena/week${start ? `?start=${start}` : ''}`).then(setW).catch(() => {}); }, [start, a?.last]);
+  if (!w?.ready) return null;
+  return html`<div class="panel">
+    <div class="ph">每週檢討<span class="sub">
+      <select value=${w.start} onChange=${(e) => setStart(e.target.value)}>${w.weeks.map((x) => html`<option value=${x}>${x} 那一週</option>`)}</select>
+      · <a href=${`/api/arena/week.md?start=${w.start}`}>下載週報</a></span></div>
+    <div class="pb journal">
+      <div class="jsum"><span class=${`tag ${w.phase === '實戰' ? 'hot' : ''}`}>${w.phase}</span>
+        <b>${w.start} ～ ${w.end}</b>（${w.days} 個交易日）</div>
+      <div class="grid g-kpi wk">
+        <div><div class="label mut">本週報酬</div><div class=${`num big ${cls(w.ret)}`}>${signed(w.ret, 2, '%')}</div><div class=${`small ${cls(w.pnl)}`}>${signed(w.pnl, 0)} 元</div></div>
+        <div><div class="label mut">同期 0050</div><div class=${`num big ${cls(w.bench_ret)}`}>${signed(w.bench_ret, 2, '%')}</div><div class=${`small ${cls(w.excess)}`}>超額 ${signed(w.excess, 2, '%')}</div></div>
+        <div><div class="label mut">勝率</div><div class="num big">${w.win_rate == null ? '—' : fmt(w.win_rate, 0) + '%'}</div><div class="small mut">賺 ${w.wins} · 賠 ${w.losses}</div></div>
+        <div><div class="label mut">本週評分</div><div class="big"><${Grade} g=${w.grade} /></div><div class="small mut">回檔 ${fmt(w.mdd, 1)}%</div></div>
+      </div>
+      <div class="mut small">買 ${w.n_buy} 筆、賣 ${w.n_sell} 筆 · 平均賺 ${signed(w.avg_win, 1, '%')} · 平均賠 ${signed(w.avg_loss, 1, '%')}
+        · 已實現 ${signed(w.realized, 0)} 元 · 未實現 ${signed(w.unrealized, 0)} 元 · 費用 ${won(w.fees)} 元</div>
+      ${w.exit_kinds.length ? html`<h4 class="jh">出場原因</h4><div class="tablewrap"><table>
+        <thead><tr><th class="l">原因</th><th>筆數</th><th>損益</th><th>平均報酬</th></tr></thead>
+        <tbody>${w.exit_kinds.map((k) => html`<tr class="nohover"><td class="l">${k.kind}</td><td class="num">${k.n}</td>
+          <td class=${`num ${cls(k.pnl)}`}>${signed(k.pnl, 0)}</td><td class=${`num ${cls(k.avg_pct)}`}>${signed(k.avg_pct, 1, '%')}</td></tr>`)}</tbody></table></div>` : ''}
+      <h4 class="jh">每天</h4>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="l">日期</th><th>總資產</th><th>擂台</th><th>0050</th><th>買</th><th>賣</th><th>持股</th></tr></thead>
+        <tbody>${w.daily.map((x) => html`<tr class="nohover"><td class="l num">${x.date}（${x.weekday}）</td><td class="num">${won(x.nav)}</td>
+          <td class=${`num ${cls(x.ret)}`}>${signed(x.ret, 2, '%')}</td><td class=${`num ${cls(x.bench_ret)}`}>${signed(x.bench_ret, 2, '%')}</td>
+          <td class="num">${x.buys}</td><td class="num">${x.sells}</td><td class="num">${x.holdings}</td></tr>`)}</tbody></table></div>
+      ${a?.log_dir ? html`<div class="mut small">每天的日誌、週報和 CSV 也自動存在電腦：<span class="num">${a.log_dir}</span></div>` : ''}
+    </div></div>`;
+}
+
 function ArenaPage({ health }) {
   const [a, err, load, setA] = useArena();
   const [busy, setBusy] = useState(false);
@@ -369,7 +455,9 @@ function ArenaPage({ health }) {
           <td class=${`num ${cls(t.pnl)}`}>${t.pnl == null ? '' : html`${signed(t.pnl, 0)} <small>${signed(t.pnl_pct, 1, '%')}</small>`}</td>
           <td class="l mut">${t.reason}</td></tr>`)}</tbody>
       </table></div>`}
-    </div>`}
+    </div>
+    <${ArenaWeek} a=${a} go=${go} />
+    <${ArenaJournal} a=${a} go=${go} />`}
     ${rules && html`<div class="panel">
       <div class="ph">操盤守則<span class="sub">規則固定、每天照表操課，不看盤中、不憑感覺
         ${a?.ready && html` · <button class="linkbtn" disabled=${busy || a.running} onClick=${() => reset(true)}>從今天重新開賽</button>
