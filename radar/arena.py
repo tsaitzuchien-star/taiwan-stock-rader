@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS arena_trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, code TEXT, name TEXT, side TEXT,
     shares INTEGER, price REAL, amount REAL, fee REAL, tax REAL, pnl REAL, pnl_pct REAL, reason TEXT
 );
+CREATE TABLE IF NOT EXISTS arena_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, decided TEXT, exec_date TEXT, side TEXT, code TEXT, name TEXT,
+    reason TEXT, score REAL, why TEXT, status TEXT, price REAL
+);
 """
 
 
@@ -72,6 +76,7 @@ class Arena:
         self.conn.executescript(SCHEMA)
         self._nav_rows: list[tuple] = []
         self._trade_rows: list[tuple] = []
+        self._order_rows: list[tuple] = []
 
     def _get(self) -> dict | None:
         row = self.conn.execute("SELECT v FROM arena_state WHERE k='state'").fetchone()
@@ -83,9 +88,11 @@ class Arena:
             self.conn.executemany("INSERT OR REPLACE INTO arena_nav VALUES(?,?,?,?,?,?,?)", self._nav_rows)
             self.conn.executemany("INSERT INTO arena_trades(date,code,name,side,shares,price,amount,fee,tax,pnl,"
                                   "pnl_pct,reason) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", self._trade_rows)
+            self.conn.executemany("INSERT INTO arena_orders(decided,exec_date,side,code,name,reason,score,why,"
+                                  "status,price) VALUES(?,?,?,?,?,?,?,?,?,?)", self._order_rows)
             self.conn.execute("INSERT OR REPLACE INTO arena_state(k, v) VALUES('state', ?)",
                               (json.dumps(state, ensure_ascii=False),))
-        self._nav_rows, self._trade_rows = [], []
+        self._nav_rows, self._trade_rows, self._order_rows = [], [], []
 
     def reset(self, fresh: bool = False) -> None:
         """清掉成績。fresh=True：不回測，100 萬從資料庫最新交易日收盤開始（下一個交易日開盤第一次買進）。"""
@@ -93,6 +100,7 @@ class Arena:
             self.conn.execute("DELETE FROM arena_state")
             self.conn.execute("DELETE FROM arena_nav")
             self.conn.execute("DELETE FROM arena_trades")
+            self.conn.execute("DELETE FROM arena_orders")
         days = self.store.trading_days()
         if fresh and len(days) > MIN_HISTORY:
             self._put_state({"start": days[-1], "live_after": days[-2], "last": None, "fresh": True,
@@ -161,9 +169,9 @@ class Arena:
         # 1) 開盤執行昨天收盤後決定的委託：先賣後買
         orders, st["orders"] = st["orders"], []
         for o in [o for o in orders if o["side"] == "sell"]:
-            self._sell(st, d, o, today, prev, data)
+            self._log_order(d, o, *self._sell(st, d, o, today, prev, data))
         for o in [o for o in orders if o["side"] == "buy"]:
-            self._buy(st, d, o, today, prev, data)
+            self._log_order(d, o, *self._buy(st, d, o, today, prev, data))
 
         # 2) 收盤結算
         value = 0.0
@@ -184,7 +192,7 @@ class Arena:
 
         # 3) 收盤後決策（隔天開盤執行）
         df = self._alpha_asof(d, data)
-        st["orders"] = self._decide(st, df, nav)
+        st["orders"] = [{**o, "decided": d} for o in self._decide(st, df, nav)]
         st["nav"] = nav
 
     def _alpha_asof(self, d: str, data: dict) -> pd.DataFrame:
@@ -247,10 +255,12 @@ class Arena:
     def _sell(self, st, d, o, today, prev, data):
         p = st["positions"].get(o["code"])
         if not p:
-            return
+            return "已不在持股", None
         px, pc = self._open(today, prev, o["code"])
-        if px is None or (pc and px <= pc * 0.905):   # 停牌或開盤跌停：賣不掉，明天再評估
-            return
+        if px is None:
+            return "停牌賣不掉，收盤後再評估", None
+        if pc and px <= pc * 0.905:   # 開盤跌停：賣不掉，收盤後再評估
+            return "開盤跌停賣不掉，收盤後再評估", px
         amount = px * p["shares"]
         fee, tax = _fee(amount), round(amount * TAX_RATE)
         proceeds = amount - fee - tax
@@ -258,29 +268,37 @@ class Arena:
         st["cash"] += proceeds
         del st["positions"][o["code"]]
         self._trade(d, o["code"], p["name"], "sell", p["shares"], px, amount, fee, tax, pnl, pnl / p["cost"] * 100, o["reason"])
+        return "成交", px
 
     def _buy(self, st, d, o, today, prev, data):
         px, pc = self._open(today, prev, o["code"])
-        if px is None or px <= 0 or (pc and px >= pc * 1.095):   # 開盤漲停：買不到
-            return
+        if px is None or px <= 0:
+            return "停牌沒買到", None
+        if pc and px >= pc * 1.095:   # 開盤漲停：買不到
+            return "開盤漲停買不到", px
         budget = min(o["budget"], st["cash"])
         shares = int(budget / (px * (1 + FEE_RATE)))
         shares = shares // 1000 * 1000 if shares >= 1000 else shares   # 夠買整張就買整張
         if shares <= 0:
-            return
+            return "現金不足", px
         amount = px * shares
         fee = _fee(amount)
         if amount + fee > st["cash"]:
-            return
+            return "現金不足", px
         st["cash"] -= amount + fee
         st["positions"][o["code"]] = {"name": o["name"], "shares": shares, "avg": (amount + fee) / shares,
                                       "cost": amount + fee, "entry": d, "last": px, "peak": px, "days": 0,
                                       "entry_price": px, "entry_fee": fee, "why": o.get("why", []),
                                       "reason": o.get("reason", "")}
         self._trade(d, o["code"], o["name"], "buy", shares, px, amount, fee, 0, None, None, o["reason"])
+        return "成交", px
 
     def _trade(self, *row):
         self._trade_rows.append(row)
+
+    def _log_order(self, d, o, status, px):
+        self._order_rows.append((o.get("decided"), d, o["side"], o["code"], o.get("name"), o.get("reason"),
+                                 o.get("score"), json.dumps(o.get("why") or [], ensure_ascii=False), status, px))
 
     # ------------------------------------------------------------ 成績
     def report(self) -> dict:

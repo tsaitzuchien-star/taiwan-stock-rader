@@ -94,14 +94,14 @@ def test_limit_up_open_cannot_buy_and_limit_down_cannot_sell(tmp_path):
     prev = pd.DataFrame({"close": [100.0]}, index=["2330"])
     today = pd.DataFrame({"open": [110.0], "close": [110.0]}, index=["2330"])
     st = {"cash": A.START_CASH, "positions": {}}
-    a._buy(st, "d", {"code": "2330", "name": "x", "budget": 125_000, "reason": ""}, today, prev, {})
+    assert a._buy(st, "d", {"code": "2330", "name": "x", "budget": 125_000, "reason": ""}, today, prev, {})[0] == "開盤漲停買不到"
     assert st["positions"] == {}
     today.loc["2330", "open"] = 101.0
     a._buy(st, "d", {"code": "2330", "name": "x", "budget": 125_000, "reason": ""}, today, prev, {})
     p = st["positions"]["2330"]
     assert p["shares"] == 1000 and st["cash"] == pytest.approx(A.START_CASH - 101_000 - 144)
     today.loc["2330", "open"] = 90.0
-    a._sell(st, "d", {"code": "2330", "reason": ""}, today, prev, {})
+    assert a._sell(st, "d", {"code": "2330", "reason": ""}, today, prev, {})[0].startswith("開盤跌停賣不掉")
     assert "2330" in st["positions"]   # 跌停賣不掉
 
 
@@ -143,3 +143,65 @@ def test_fresh_start_from_latest_day(tmp_path):
     a.run()
     r = a.report()
     assert r["trades"] > 0 and r["trading_days"] == 2 and all(p["phase"] == "live" for p in r["curve"])
+
+
+def test_journal_day_week_and_export(tmp_path):
+    from radar import arena_journal as J
+    s = _db(tmp_path / "j.db", upto=75)
+    a = A.Arena(s)
+    a.run()
+    bars, inst, margin, _, _ = _market()
+    s.upsert_bars([r for r in bars if r[1] in DAYS[75:]])
+    s.upsert_dataset("inst", [r for r in inst if r[1] in DAYS[75:]])
+    s.upsert_dataset("margin", [r for r in margin if r[1] in DAYS[75:]])
+    a.run()
+    j = J.Journal(s)
+    rep = a.report()
+    # 每天：持股還原要跟擂台的帳一致
+    last = j.day()
+    assert last["date"] == DAYS[-1] and last["phase"] == "實戰" and last["next"] is None
+    assert {h["code"] for h in last["holdings"]} == {p["code"] for p in rep["positions"]}
+    assert last["cash"] + sum(h["value"] for h in last["holdings"]) == pytest.approx(rep["nav"])
+    assert [o["code"] for o in last["decisions"]] == [o["code"] for o in rep["orders"]]
+    # 每筆委託都有紀錄：成交的筆數等於成交紀錄
+    orders = pd.read_sql_query("SELECT * FROM arena_orders", s._conn)
+    assert (orders["status"] == "成交").sum() == len(j.trades) and orders["decided"].notna().all()
+    first, second = j.day(DAYS[60]), j.day(DAYS[61])
+    assert first["prev"] is None and not first["buys"] and first["decisions"]   # 第一天收盤後才決定
+    assert [b["code"] for b in second["buys"]] == [o["code"] for o in first["decisions"] if o["side"] == "buy"]
+    # 每週：週報數字自洽
+    w = j.week()
+    assert w["ready"] and w["end"] == DAYS[-1] and w["start"] == J.monday(DAYS[-1])
+    assert w["nav_end"] == pytest.approx(rep["nav"]) and len(w["daily"]) == w["days"]
+    assert w["n_sell"] == w["wins"] + w["losses"]
+    all_weeks = j.weeks()
+    assert sum(j.week(x)["n_buy"] for x in all_weeks) == int((j.trades["side"] == "buy").sum())
+    assert "百萬擂台週報" in J.week_md(w) and "收盤持股" in J.day_md(last)
+    # 自動存檔
+    root = J.export(s, tmp_path / "logs")
+    assert root.name == f"開賽{DAYS[60]}"
+    assert len(list((root / "每日").glob("*.md"))) == len(j.days)
+    assert len(list((root / "每週").glob("*.md"))) == len(all_weeks)
+    assert (root / "成交紀錄.csv").read_text(encoding="utf-8-sig").startswith("日期,代號,名稱,動作")
+
+
+def test_journal_api(tmp_path):
+    _db(tmp_path / "r.db").close()
+    client = TestClient(create_app(Settings(db_path=tmp_path / "r.db")))
+    r = client.get("/api/arena").json()
+    for _ in range(100):
+        if not r["running"] and r["ready"]:
+            break
+        time.sleep(0.1)
+        r = client.get("/api/arena").json()
+    r = client.get("/api/arena").json()
+    assert r["log_dir"] and (tmp_path / "擂台紀錄").exists()
+    d = client.get("/api/arena/journal").json()
+    assert d["ready"] and d["days"][0] == d["date"] == DAYS[-1]
+    d2 = client.get("/api/arena/journal", params={"date": DAYS[61]}).json()
+    assert d2["date"] == DAYS[61] and d2["prev"] == DAYS[60]
+    w = client.get("/api/arena/week").json()
+    assert w["ready"] and w["weeks"][0] == w["start"]
+    md = client.get("/api/arena/week.md", params={"start": w["weeks"][-1]})
+    assert md.status_code == 200 and "百萬擂台週報" in md.text and "attachment" in md.headers["content-disposition"]
+    assert "每日日誌" in client.get("/api/arena/day.md").text

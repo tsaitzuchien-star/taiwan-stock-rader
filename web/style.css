@@ -246,3 +246,11 @@ tr.tot td { font-weight: 700; border-top: 1px solid var(--line-strong); }
 .hb { position: relative; flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; }
 .hb .bar { width: 100%; background: var(--accent); opacity: .85; border-radius: 2px 2px 0 0; }
 .hb .base { position: absolute; left: -1px; right: -1px; height: 2px; background: var(--muted); }
+
+/* 擂台日誌 / 週報 */
+.journal { display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.journal .jsum { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; line-height: 1.8; }
+.journal .jh { margin: 8px 0 0; font-size: 13px; color: var(--text-2); }
+.journal .wk { gap: 12px; }
+.journal .wk .big { font-size: 22px; font-weight: 600; }
+.ph .sub select { background: var(--bg-2, #141a26); color: var(--text); border: 1px solid var(--line, #2a3242); border-radius: 6px; padding: 2px 6px; font-size: 12px; }
