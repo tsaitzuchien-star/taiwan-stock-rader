@@ -126,3 +126,20 @@ def test_api_arena(tmp_path):
     assert len(r["curve"]) == 20
     r2 = client.post("/api/arena/reset").json()
     assert r2["running"] or r2["ready"]
+
+
+def test_fresh_start_from_latest_day(tmp_path):
+    s = _db(tmp_path / "f.db", upto=75)
+    a = A.Arena(s)
+    a.reset(fresh=True)
+    a.run()
+    r = a.report()
+    assert r["fresh"] and r["start"] == DAYS[74] and r["trading_days"] == 1
+    assert r["nav"] == A.START_CASH and r["trades"] == 0 and r["live_since"] == DAYS[74]
+    assert any(o["side"] == "buy" for o in r["orders"])   # 收盤後決定，隔天開盤買
+    bars, inst, margin, _, _ = _market()
+    s.upsert_bars([x for x in bars if x[1] == DAYS[75]])
+    s.upsert_dataset("inst", [x for x in inst if x[1] == DAYS[75]])
+    a.run()
+    r = a.report()
+    assert r["trades"] > 0 and r["trading_days"] == 2 and all(p["phase"] == "live" for p in r["curve"])

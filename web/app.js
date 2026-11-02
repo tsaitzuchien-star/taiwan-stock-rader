@@ -271,10 +271,13 @@ function EquityChart({ curve }) {
 function ArenaPage({ health }) {
   const [a, err, load, setA] = useArena();
   const [busy, setBusy] = useState(false);
-  const reset = async () => {
-    if (!confirm('確定要重新開賽嗎？目前的成績會清掉，從頭回測。')) return;
+  const reset = async (fresh) => {
+    const msg = fresh
+      ? `確定要從今天重新開賽嗎？\n目前的成績會清掉，100 萬從資料庫最新一天（${health?.db?.latest_date || ''}）收盤開始，下一個交易日開盤第一次買進。\n\n提醒：請先在收盤後「更新資料庫」，讓今天的資料進來再按。`
+      : '確定要重新開賽嗎？目前的成績會清掉，用最近幾週的資料重新回測。';
+    if (!confirm(msg)) return;
     setBusy(true);
-    try { setA(await post('/api/arena/reset')); } catch (e) { alert(e.message); }
+    try { setA(await post(`/api/arena/reset${fresh ? '?fresh=true' : ''}`)); } catch (e) { alert(e.message); }
     setBusy(false);
   };
   if (health && !health.db.latest_date) return html`<${EmptyDb} />`;
@@ -283,7 +286,7 @@ function ArenaPage({ health }) {
   return html`
     <div class="panel"><div class="ph">🏆 ${a?.name || '百萬操盤擂台'}
       <span class="sub">雷達用法人評分每天模擬操作 100 萬元（不是真的下單）·
-        ${a?.ready ? html`開賽 ${a.start}${a.live_since ? ` · ${a.live_since} 起為實戰` : ` · ${a.last} 以前為回測，下一個交易日起實戰`}` : ''}</span></div>
+        ${a?.ready ? html`開賽 ${a.start}${a.fresh ? ' · 全程實戰（沒有回測）' : a.live_since ? ` · ${a.live_since} 起為實戰` : ` · ${a.last} 以前為回測，下一個交易日起實戰`}` : ''}</span></div>
       ${!a?.ready && html`<${ArenaWaiting} a=${a} err=${err} />`}
     </div>
     ${a?.ready && html`
@@ -330,7 +333,14 @@ function ArenaPage({ health }) {
             <td class="num">${p.shares.toLocaleString()}</td><td class="num">${fmt(p.avg, 2)}</td><td class="num">${fmt(p.last, 2)}</td>
             <td class="num">${won(p.value)}</td>
             <td class=${`num ${cls(p.pnl)}`}>${signed(p.pnl, 0)}<br /><small>${signed(p.pnl_pct, 1, '%')}</small></td>
-            <td class="num mut">${fmt(p.weight, 1)}%</td><td class="num mut">${p.days} 日</td></tr>`)}</tbody>
+            <td class="num mut">${fmt(p.weight, 1)}%</td><td class="num mut">${p.days} 日</td></tr>
+            <tr class="why nohover"><td colspan="8" class="l">
+              <div class="buyline">📌 <b>${p.entry}</b> 09:00 開盤以 <b class="num">${fmt(p.entry_price, 2)}</b> 元買進
+                <b class="num">${p.shares.toLocaleString()}</b> 股（${p.shares >= 1000 ? `${Math.floor(p.shares / 1000)} 張${p.shares % 1000 ? ` ${p.shares % 1000} 股` : ''}` : '零股'}），
+                花費 <b class="num">${won(p.entry_price * p.shares + (p.entry_fee || 0))}</b> 元（含手續費）</div>
+              ${p.why?.length ? html`<ul class="whylist">${p.why.map((w) => html`<li>${w}</li>`)}</ul>`
+                : html`<div class="mut">買進理由：${p.reason}</div>`}
+            </td></tr>`)}</tbody>
         </table></div>`}
       </div>
       <div class="panel">
@@ -339,7 +349,8 @@ function ArenaPage({ health }) {
           <thead><tr><th class="l">動作</th><th class="l">股票</th><th class="l">理由</th><th>預計金額</th></tr></thead>
           <tbody>${a.orders.map((o) => html`<tr onClick=${() => go(o.code)}>
             <td class="l"><span class=${`tag ${o.side === 'buy' ? 'up' : 'dn'}`}>${o.side === 'buy' ? '買進' : '賣出'}</span></td>
-            <td class="l"><span class="num acc">${o.code}</span> ${o.name}</td><td class="l mut">${o.reason}</td>
+            <td class="l"><span class="num acc">${o.code}</span> ${o.name}</td>
+            <td class="l mut">${o.why?.length ? html`<ul class="whylist">${o.why.map((w) => html`<li>${w}</li>`)}</ul>` : o.reason}</td>
             <td class="num">${o.side === 'buy' ? won(o.budget) : '全部'}</td></tr>`)}</tbody>
         </table></div>`}
       </div>
@@ -360,7 +371,8 @@ function ArenaPage({ health }) {
     </div>`}
     ${rules && html`<div class="panel">
       <div class="ph">操盤守則<span class="sub">規則固定、每天照表操課，不看盤中、不憑感覺
-        ${a?.ready && html` · <button class="linkbtn" disabled=${busy || a.running} onClick=${reset}>重新開賽</button>`}</span></div>
+        ${a?.ready && html` · <button class="linkbtn" disabled=${busy || a.running} onClick=${() => reset(true)}>從今天重新開賽</button>
+          · <button class="linkbtn" disabled=${busy || a.running} onClick=${() => reset(false)}>重新回測</button>`}</span></div>
       <div class="grid g-3 pb rules">
         <div><h4 class="up">何時買</h4><ul>${rules.entry.map((x) => html`<li>${x}</li>`)}</ul></div>
         <div><h4 class="dn">何時賣</h4><ul>${rules.exit.map((x) => html`<li>${x}</li>`)}</ul></div>
