@@ -166,7 +166,7 @@ function Overview({ health, breadth }) {
         </div>
       </div>
       <div class="panel">
-        <div class="ph">五大戰術命中<span class="sub">全市場</span></div>
+        <div class="ph">戰術命中<span class="sub">全市場</span></div>
         <div class="pb" style="display:flex;flex-direction:column;gap:12px;font-size:13px">
           ${(summary || []).map((s) => html`<a href=${`#/radar/${s.id}`} style="display:flex;align-items:center;gap:10px;color:var(--text)">
             <span style="flex:0 0 84px">${s.name}</span>

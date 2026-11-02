@@ -1,4 +1,4 @@
-"""五大戰術預設值與篩選條件（沿用 V10.9.7 apply_mask_and_style 的邏輯）。"""
+"""雷達戰術預設值與篩選條件（沿用 V10.9.7 apply_mask_and_style 的邏輯）。"""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -35,6 +35,8 @@ TACTICS = [
      "params": ScanParams(100.0, 3000, 1000, 2.0, False, True, False, False)},
     {"id": "monster", "name": "妖股獵人", "desc": "久盤後漲停創新高，主力點火",
      "params": ScanParams(80.0, 3000, 500, 3.0, False, False, False, False, True, True, True)},
+    {"id": "monster_hi", "name": "高價妖股", "desc": "千元以下，久盤漲停創新高",
+     "params": ScanParams(1000.0, 5000, 300, 3.0, False, False, False, False, True, True, True)},
 ]
 TACTIC_BY_ID = {t["id"]: t for t in TACTICS}
 
