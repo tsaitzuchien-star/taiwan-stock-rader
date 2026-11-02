@@ -211,6 +211,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             resp.headers["Cache-Control"] = "no-cache"
         return resp
 
+    @app.on_event("startup")
+    def _auto_connect_yuanta():
+        """有設定元大帳號就在背景自動登入一次（失敗不重試，避免用掉每日登入次數）。"""
+        hub = engine.yuanta
+        if hub.configured and not hub.config.problems():
+            def run():
+                try:
+                    hub.connect()
+                except Exception:  # noqa: BLE001
+                    pass   # 錯誤訊息存在 hub.error，持倉風控頁會顯示
+            threading.Thread(target=run, daemon=True).start()
+
     @app.on_event("shutdown")
     def _logout_yuanta():
         try:
@@ -262,11 +274,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if bars.empty:
             return {"latest": None}
         latest = bars["date"].max()
+        live = _live_breadth(cache, str(latest.date()))
+        if live:
+            return live
         today = bars[bars["date"] == latest].set_index("code")["close"]
+        out = _count(((close, cache["prev_close"].get(code)) for code, close in today.items()))
+        df = cache["df"]
+        above = float((df['現價(元)'] >= df['季線位置']).mean() * 100) if not df.empty else None
+        return {"latest": str(latest.date()), **out, "above_ma60_pct": above, "live": False}
+
+    def _count(pairs) -> dict:
         up = down = flat = lim_up = lim_down = 0
-        for code, close in today.items():
-            prev = cache["prev_close"].get(code)
-            if not prev:
+        for close, prev in pairs:
+            if not prev or close is None:
                 continue
             chg = (close - prev) / prev * 100
             if chg > 0:
@@ -277,10 +297,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 flat += 1
             lim_up += chg >= 9.5
             lim_down += chg <= -9.5
+        return {"up": up, "down": down, "flat": flat, "limit_up": lim_up, "limit_down": lim_down}
+
+    def _live_breadth(cache: dict, db_latest: str) -> dict | None:
+        """元大已連線、今天是交易日、資料庫還沒有今天的盤後資料：改用元大即時報價算大盤。"""
+        hub = engine.yuanta
+        now = datetime.now()
+        today = now.strftime("%Y-%m-%d")
+        if not hub.logged_in or now.weekday() >= 5 or db_latest >= today or now.strftime("%H:%M") < "09:00":
+            return None
         df = cache["df"]
-        above = float((df['現價(元)'] >= df['季線位置']).mean() * 100) if not df.empty else None
-        return {"latest": str(latest.date()), "up": up, "down": down, "flat": flat,
-                "limit_up": lim_up, "limit_down": lim_down, "above_ma60_pct": above}
+        if df.empty:
+            return None
+        markets = cache["markets"]
+        hub.refresh_market([(c, markets.get(c) or "TWSE") for c in df['股票代號']])
+        quotes = hub.quotes()
+        rows = [(quotes.get(c, {}).get("price"), quotes.get(c, {}).get("prev_close"), ma60)
+                for c, ma60 in zip(df['股票代號'], df['季線位置'])]
+        rows = [r for r in rows if r[0] and r[1]]
+        if len(rows) < len(df) * 0.5:   # 快照還沒抓完：先顯示盤後資料
+            return None
+        out = _count((p, prev) for p, prev, _ in rows)
+        valid = [(p, m) for p, _, m in rows if m == m and m]
+        above = sum(p >= m for p, m in valid) / len(valid) * 100 if valid else None
+        closed = now.strftime("%H:%M") >= "13:31"
+        return {"latest": today, **out, "above_ma60_pct": above, "live": True, "closed": closed,
+                "time": hub.market_time, "count": len(rows), "db_latest": db_latest}
 
     @app.get("/api/stock/{code}")
     def stock(code: str):
