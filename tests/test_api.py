@@ -87,3 +87,9 @@ def test_defense_verdicts():
     assert hot["verdict"]["level"] == "take"
     weak = evaluate(100, 1000, pd.Series([100.0] * 59 + [97.0]))
     assert weak["verdict"]["level"] == "warn" and weak["escape_weak"] is not None
+
+
+def test_web_files_are_not_cached_stale(client):
+    r = client.get("/static/app.js")
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-cache"
+    assert client.get("/").headers["cache-control"] == "no-cache"
