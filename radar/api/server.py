@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from .. import alpha as radar_alpha
 from .. import arena as radar_arena
+from .. import entry as radar_entry
 from .. import collect as radar_collect
 from .. import positions as radar_positions
 from ..config import ROOT, Settings, load_settings
@@ -37,6 +38,7 @@ COLMAP = {
     '日內振幅(%)': 'amp', '五日均量(張)': 'vol5', '月均量(20日)': 'vol20', '今日成交(張)': 'vol',
     '月量爆發倍數': 'vr', '多空力道': 'power', '成長K線': 'growth', '跳空缺口(%)': 'gap',
     '布林帶寬(%)': 'bw', '均線糾結(%)': 'ma_diff', '季線位置': 'ma60', '強力洗盘訊號': 'washout',
+    '季線乖離(%)': 'bias', '20日漲幅(%)': 'ret20', '前期布林寬(%)': 'pre_bw', '_close_pos': 'close_pos',
 }
 
 
@@ -117,6 +119,13 @@ class Engine:
             return self._alpha
 
 
+    def alpha_lookup(self) -> dict[str, dict]:
+        """進場分數用的法人評分；籌碼資料有問題時不要讓掃描整個失敗。"""
+        try:
+            return radar_entry.alpha_lookup(self.alpha()["df"])
+        except Exception:  # noqa: BLE001
+            return {}
+
     # ---------------------------------------------------------------- 百萬操盤擂台
     def arena_refresh(self) -> None:
         """有新交易日就在背景補算（第一次開賽要回測幾週，約需數十秒）。"""
@@ -183,12 +192,29 @@ ALPHA_COLS = ["rank", "code", "name", "market", "industry", "price", "chg", "vol
               "ret60", "dist_ma60", "pe", "pb", "dy", "rev_ym", "yoy", "mom", "cum_yoy", "tags"]
 
 
-def rows_json(df: pd.DataFrame, cache: dict) -> list[dict]:
+TF_RULES = {"W": "W-FRI", "M": "ME"}
+
+
+def resample_ohlcv(ohlcv: pd.DataFrame, tf: str) -> pd.DataFrame:
+    """日 K 轉週 K / 月 K（時間標在該週、該月最後一個交易日）。"""
+    rule = TF_RULES.get((tf or "D").upper())
+    if not rule or ohlcv.empty:
+        return ohlcv
+    idx = pd.Series(ohlcv.index, index=ohlcv.index)
+    g = ohlcv.resample(rule)
+    out = pd.DataFrame({"Open": g["Open"].first(), "High": g["High"].max(), "Low": g["Low"].min(),
+                        "Close": g["Close"].last(), "Volume": g["Volume"].sum()})
+    out.index = idx.resample(rule).last()
+    return out.dropna(subset=["Close"])
+
+
+def rows_json(df: pd.DataFrame, cache: dict, alpha: dict[str, dict] | None = None) -> list[dict]:
     if df.empty:
         return []
     out = df.rename(columns=COLMAP)
     records = json.loads(out.to_json(orient="records", force_ascii=False))
     for r in records:
+        r.update(radar_entry.score_row(r, (alpha or {}).get(r["code"])))
         r["market"] = cache["markets"].get(r["code"], "")
         r["spark"] = cache["sparks"].get(r["code"], [])
         r["growth"] = r.get("growth", "-") != "-"
@@ -259,7 +285,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         res = apply_filters(cache["df"], cfg)
         return {"latest": cache["latest"], "universe": len(cache["df"]), "skipped": len(cache["missing"]),
                 "elapsed": round(cache["elapsed"] + time.perf_counter() - t0, 2),
-                "params": cfg.to_dict(), "rows": rows_json(res, cache)}
+                "params": cfg.to_dict(), "rows": rows_json(res, cache, engine.alpha_lookup())}
 
     @app.get("/api/tactics/summary")
     def tactics_summary():
@@ -325,14 +351,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "time": hub.market_time, "count": len(rows), "db_latest": db_latest}
 
     @app.get("/api/stock/{code}")
-    def stock(code: str):
+    def stock(code: str, tf: str = "D"):
         cache = engine.metrics()
         bars = cache["bars"]
         g = bars[bars["code"] == code]
         if g.empty:
             raise HTTPException(404, f"資料庫裡沒有 {code}")
         names = engine.stocks().set_index("code")["name"].to_dict()
-        ohlcv = to_ohlcv(g)
+        ohlcv = resample_ohlcv(to_ohlcv(g), tf)
         close = ohlcv["Close"]
         ma = {n: close.rolling(n).mean() for n in (5, 20, 60)}
         std20 = close.rolling(20).std()
@@ -343,11 +369,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return [{"time": d.strftime("%Y-%m-%d"), "value": round(float(v), 2)}
                     for d, v in s.items() if pd.notna(v)]
         row = cache["df"][cache["df"]["股票代號"] == code]
-        metrics = rows_json(row, cache)[0] if not row.empty else None
+        metrics = rows_json(row, cache, engine.alpha_lookup())[0] if not row.empty else None
         return {"code": code, "name": names.get(code, ""), "market": cache["markets"].get(code, ""),
                 "candles": candles, "ma5": series(ma[5]), "ma20": series(ma[20]), "ma60": series(ma[60]),
                 "bb_upper": series(ma[20] + 2 * std20), "bb_lower": series(ma[20] - 2 * std20),
-                "metrics": metrics}
+                "metrics": metrics, "tf": tf.upper() if tf.upper() in TF_RULES else "D",
+                "history_days": len(g)}
 
     @app.get("/api/stock/{code}/defense")
     def defense(code: str, cost: float, shares: int, fee_discount: float = 1.0):

@@ -1,7 +1,7 @@
 # 複製成 config.local.toml 後再修改。config.local.toml 不會上傳 GitHub。
 
 [radar]
-history_trading_days = 90    # 資料庫保留的交易日數
+history_trading_days = 240   # 資料庫保留的交易日數（約 1 年；想看 2 年改 500，第一次更新會比較久）
 request_interval_sec = 3.0   # 對官方網站請求的間隔秒數
 # db_path = "data/radar.db"
 

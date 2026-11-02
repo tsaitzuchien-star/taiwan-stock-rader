@@ -573,14 +573,41 @@ function Sectors({ health }) {
 
 // ---------------------------------------------------------------- 雷達
 const COLS = [
-  ['code', '代號', 'l'], ['name', '名稱', 'l'], ['price', '現價'], ['chg', '漲跌%'], ['amp', '振幅%'],
+  ['code', '代號', 'l'], ['name', '名稱', 'l'], ['entry', '進場分數'], ['stage', '位階'], ['price', '現價'], ['chg', '漲跌%'],
+  ['bias', '季線乖離%'], ['ret20', '20日漲幅%'], ['alpha', '法人評分'], ['amp', '振幅%'],
   ['vol', '今日量(張)'], ['vr', '量比'], ['power', '多空力道'], ['gap', '跳空%'], ['bw', '布林寬%'],
   ['ma_diff', '均線糾結%'], ['ma60', '季線'],
 ];
+const ENTRY_PARTS = [['pos', '位置', 30], ['brk', '突破', 25], ['base', '盤整', 15], ['chip', '法人', 30]];
+const LIGHT = { green: '🟢', yellow: '🟡', red: '🔴' };
+const STAGE_CLS = { 起漲: 'up', 中段: 'hot', 高檔: 'dn', 季線下: '' };
+
+function EntryScore({ r }) {
+  if (r.entry == null) return html`<span class="mut">—</span>`;
+  return html`<span class=${`entry ${r.light}`} title=${(r.reasons || []).join('\n')}>
+    ${LIGHT[r.light]} <b class="num">${r.entry}</b></span>
+    <div class="eparts num">${ENTRY_PARTS.map(([k, l]) => `${l}${Math.round(r.entry_parts?.[k] ?? 0)}`).join(' ')}</div>`;
+}
+
+function EntryCard({ m }) {
+  if (!m || m.entry == null) return null;
+  return html`<div class="panel">
+    <div class="ph">進場分數<span class="sub">剛起漲還是已經漲一波</span></div>
+    <div class="pb" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span class=${`entry ${m.light}`} style="font-size:28px">${LIGHT[m.light]} <b class="num">${m.entry}</b></span>
+        <span class="mut">/ 100</span><span class=${`tag ${STAGE_CLS[m.stage] || ''}`}>${m.stage}</span></div>
+      ${ENTRY_PARTS.map(([k, l, max], i) => html`<div>
+        <div class="frow"><span class="mut">${l}</span><span class="meter"><span style=${`width:${(m.entry_parts[k] / max) * 100}%;background:${m.entry_parts[k] / max >= 0.7 ? C.up : m.entry_parts[k] / max >= 0.5 ? C.accent : '#3A4458'}`}></span></span><span class="num">${fmt(m.entry_parts[k], 0)}/${max}</span></div>
+        <div class="mut" style="font-size:12px;margin:2px 0 0 44px">${m.reasons[i]}</div></div>`)}
+      <div class="mut" style="font-size:12px">70 分以上 🟢、50～69 🟡、未滿 50 🔴。規則化參考，不是投資建議。</div>
+    </div>
+  </div>`;
+}
 
 function HitTable({ rows, compact, sort, onSort }) {
   if (!rows.length) return html`<div class="empty">沒有符合條件的股票。寧可空手，絕不追高。</div>`;
-  const cols = compact ? COLS.filter(([k]) => ['code', 'name', 'price', 'chg', 'vol', 'vr'].includes(k)) : COLS;
+  const cols = compact ? COLS.filter(([k]) => ['code', 'name', 'entry', 'stage', 'price', 'chg', 'vol', 'vr'].includes(k)) : COLS;
   return html`<div class="tablewrap"><table>
     <thead><tr>
       ${cols.map(([k, label, al]) => html`<th class=${`${al || ''} ${onSort ? 'sortable' : ''} ${sort?.key === k ? 'sorted' : ''}`}
@@ -589,8 +616,10 @@ function HitTable({ rows, compact, sort, onSort }) {
     </tr></thead>
     <tbody>${rows.map((r) => html`<tr onClick=${() => { location.hash = `#/stock/${r.code}`; }}>
       <td class="l num acc">${r.code}</td><td class="l">${r.name}</td>
+      <td><${EntryScore} r=${r} /></td><td><span class=${`tag ${STAGE_CLS[r.stage] || ''}`}>${r.stage}</span></td>
       <td class="num">${fmt(r.price)}</td><td class=${`num ${cls(r.chg)}`}>${signed(r.chg, 2, '%')}</td>
-      ${!compact && html`<td class="num">${fmt(r.amp)}</td>`}
+      ${!compact && html`<td class=${`num ${cls(r.bias)}`}>${signed(r.bias, 1, '%')}</td><td class=${`num ${cls(r.ret20)}`}>${signed(r.ret20, 1, '%')}</td>
+        <td class="num">${r.alpha == null ? '—' : r.alpha}</td><td class="num">${fmt(r.amp)}</td>`}
       <td class="num">${fmt(r.vol, 0)}</td><td class="num acc">${fmt(r.vr, 1)}x</td>
       ${!compact && html`
         <td class=${`num ${cls(r.power)}`}>${signed(r.power, 1)}</td><td class="num">${fmt(r.gap)}</td>
@@ -602,8 +631,10 @@ function HitTable({ rows, compact, sort, onSort }) {
 }
 
 function toCsv(rows) {
-  const head = COLS.map(([, l]) => l).join(',');
-  const body = rows.map((r) => COLS.map(([k]) => (r[k] ?? '')).join(',')).join('\n');
+  const cell = (v) => (typeof v === 'string' && /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : (v ?? ''));
+  const head = [...COLS.map(([, l]) => l), '燈號', '判讀理由'].join(',');
+  const body = rows.map((r) => [...COLS.map(([k]) => cell(r[k])), LIGHT[r.light] || '',
+    cell((r.reasons || []).join('；'))].join(',')).join('\n');
   const blob = new Blob(['﻿' + head + '\n' + body], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -618,7 +649,7 @@ function Radar({ initialTactic, health }) {
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [sort, setSort] = useState({ key: 'vr', dir: -1 });
+  const [sort, setSort] = useState({ key: 'entry', dir: -1 });
 
   const run = (body) => {
     setBusy(true); setErr('');
@@ -809,16 +840,27 @@ function ScoreCard({ chips }) {
   </div>`;
 }
 
+const TF = [['D', '日K', '日'], ['W', '週K', '週'], ['M', '月K', '月']];
+
 function Stock({ code, stocks, health }) {
   const [data, setData] = useState(null);
+  const [chart, setChart] = useState(null);
+  const [tf, setTf] = useState('D');
   const [chips, setChips] = useState(null);
   const [err, setErr] = useState('');
   useEffect(() => {
     if (!code) return;
-    setData(null); setChips(null); setErr('');
-    api(`/api/stock/${code}`).then(setData).catch((e) => setErr(e.message));
+    setData(null); setChart(null); setChips(null); setErr(''); setTf('D');
+    api(`/api/stock/${code}`).then((d) => { setData(d); setChart(d); }).catch((e) => setErr(e.message));
     api(`/api/stock/${code}/chips`).then(setChips).catch(() => {});
   }, [code]);
+  const pickTf = (t) => {
+    setTf(t);
+    if (t === 'D') { setChart(data); return; }
+    api(`/api/stock/${code}?tf=${t}`).then(setChart).catch((e) => setErr(e.message));
+  };
+  const unit = TF.find(([k]) => k === tf)[2];
+  const bars = chart?.candles.length || 0;
   const m = data?.metrics;
   const last = data?.candles[data.candles.length - 1];
   const prev = data?.candles[data.candles.length - 2];
@@ -842,14 +884,18 @@ function Stock({ code, stocks, health }) {
       </section>
       <div class="row">
         <div class="panel" style="flex:999 1 560px">
-          <div class="ph">日 K 線<span class="sub">資料庫保留 ${data.candles.length} 個交易日</span></div>
-          <div class="legend"><span style="color:#C9D1E0">— MA5</span><span class="acc">— MA20</span><span style="color:var(--blue)">— MA60</span><span class="mut">— 布林通道</span></div>
-          <div style="padding:8px 8px 12px"><${KChart} data=${data} /></div>
+          <div class="ph">K 線圖
+            <span class="seg">${TF.map(([k, l]) => html`<button type="button" class=${tf === k ? 'on' : ''} onClick=${() => pickTf(k)}>${l}</button>`)}</span>
+            <span class="sub">${bars} 根${unit} K · 資料庫保留 ${data.history_days || data.candles.length} 個交易日</span></div>
+          <div class="legend"><span style="color:#C9D1E0">— 5${unit}線</span><span class="acc">— 20${unit}線</span><span style="color:var(--blue)">— 60${unit}線</span><span class="mut">— 布林通道</span></div>
+          ${tf !== 'D' && bars < 20 && html`<div class="mut" style="font-size:12px;padding:0 16px">目前資料只有 ${data.history_days} 個交易日，${unit} K 根數還少；更新資料庫會自動回補到約 1 年。</div>`}
+          <div style="padding:8px 8px 12px"><${KChart} data=${chart || data} /></div>
           <div class="ph" style="border-top:1px solid var(--line)">法人籌碼 · 近 20 日<span class="sub">
             <span style="color:var(--blue)">■ 外資</span>　<span class="acc">■ 投信</span>　<span style="color:#C9D1E0">┅ 融資餘額</span>　單位：張</span></div>
           <div style="padding:8px 12px 12px">${chips ? html`<${ChipChart} inst=${chips.inst} margin=${chips.margin} />` : html`<div class="empty">載入中…</div>`}</div>
         </div>
         <div style="flex:1 1 340px;display:flex;flex-direction:column;gap:16px;min-width:0">
+          <${EntryCard} m=${m} />
           <${ScoreCard} chips=${chips} />
           <div class="panel">
             <div class="ph">雷達指標<span class="sub">${data.candles.length < 60 ? '不足 60 日，部分指標無法計算' : '最新交易日'}</span></div>

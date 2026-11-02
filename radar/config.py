@@ -13,8 +13,8 @@ LOCAL_CONFIG = ROOT / "config.local.toml"
 @dataclass
 class Settings:
     db_path: Path = ROOT / "data" / "radar.db"
-    # 建庫時往回抓多少個「交易日」；60 日均線至少需要 60 根，多留緩衝。
-    history_trading_days: int = 90
+    # 建庫時往回抓多少個「交易日」；約 1 年，週 K / 月 K 才看得出長期趨勢（60 日均線至少要 60 根）。
+    history_trading_days: int = 240
     # 對證交所 / 櫃買中心每次請求之間的間隔秒數，避免被封鎖。
     request_interval_sec: float = 3.0
     # 法人買賣超、融資融券保留幾個交易日（算連買天數、5 日 / 20 日累計）
