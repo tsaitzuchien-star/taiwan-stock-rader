@@ -45,7 +45,7 @@ function Spark({ data, w = 84, h = 22 }) {
 
 // ---------------------------------------------------------------- 外框
 const NAV = [
-  ['overview', '總覽'], ['arena', '百萬擂台'], ['alpha', '法人選股'], ['sectors', '產業輪動'], ['radar', '雷達掃描'], ['watch', '觀察名單'], ['stock', '個股分析'],
+  ['overview', '總覽'], ['arena', '百萬擂台'], ['alpha', '法人選股'], ['trust', '投信預測'], ['sectors', '產業輪動'], ['radar', '雷達掃描'], ['watch', '觀察名單'], ['stock', '個股分析'],
   ['positions', '持倉風控'], ['settings', '資料與設定'],
 ];
 
@@ -106,6 +106,7 @@ function Overview({ health, breadth }) {
   const [flows, setFlows] = useState(null);
   const [sectors, setSectors] = useState(null);
   const [err, setErr] = useState('');
+  const watch = useWatched();
   useEffect(() => {
     if (!health?.db?.latest_date) return;
     api('/api/tactics/summary').then(setSummary).catch((e) => setErr(e.message));
@@ -137,14 +138,14 @@ function Overview({ health, breadth }) {
     <section class="grid g-2">
       <div class="panel">
         <div class="ph">法人綜合評分 前 10 名<span class="sub"><a href="#/alpha">看全部</a></span></div>
-        ${alpha && !alpha.coverage.with_chips ? html`<${NoChips} />` : html`<${AlphaTable} rows=${(alpha?.rows || []).slice(0, 10)} compact />`}
+        ${alpha && !alpha.coverage.with_chips ? html`<${NoChips} />` : html`<${AlphaTable} rows=${(alpha?.rows || []).slice(0, 10)} compact watch=${watch} source="法人選股" date=${health?.db?.latest_date} />`}
       </div>
       <${FlowsPanel} flows=${flows} />
     </section>
     <section class="grid g-2">
       <div class="panel">
         <div class="ph">雷達今日命中 · 深海潛艦<span class="sub">${hits ? `${hits.rows.length} 檔` : '計算中…'} · <a href="#/radar">看全部</a></span></div>
-        <${HitTable} rows=${(hits?.rows || []).slice(0, 10)} compact />
+        <${HitTable} rows=${(hits?.rows || []).slice(0, 10)} compact watch=${watch} source="深海潛艦" date=${health?.db?.latest_date} />
       </div>
       <div class="panel">
         <div class="ph">產業資金流向<span class="sub">法人近 5 日淨買超 · <a href="#/sectors">產業輪動</a></span></div>
@@ -450,7 +451,7 @@ const ACOLS = [
   ['margin_chg5', '融資5日(張)'], ['yoy', '營收年增%'], ['pe', '本益比'], ['dy', '殖利率%'],
 ];
 
-function AlphaTable({ rows, compact, sort, onSort }) {
+function AlphaTable({ rows, compact, sort, onSort, watch, source, date }) {
   if (!rows.length) return html`<div class="empty">沒有符合條件的股票。</div>`;
   const cols = compact ? ACOLS.filter(([k]) => ['rank', 'code', 'name', 'score', 'factors', 'f5', 't5'].includes(k)) : ACOLS;
   const cell = (r, k) => {
@@ -470,10 +471,10 @@ function AlphaTable({ rows, compact, sort, onSort }) {
   };
   return html`<div class="tablewrap"><table>
     <thead><tr>${cols.map(([k, label, al, nosort]) => html`<th class=${`${al || ''} ${onSort && !nosort ? 'sortable' : ''} ${sort?.key === k ? 'sorted' : ''}`}
-      onClick=${() => onSort && !nosort && onSort(k)}>${label}${sort?.key === k ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`)}
+      onClick=${() => onSort && !nosort && onSort(k)}>${label}${sort?.key === k ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>${k === 'name' && watch ? html`<th class="l">觀察</th>` : ''}`)}
       ${!compact && html`<th class="l">訊號</th>`}</tr></thead>
     <tbody>${rows.map((r) => html`<tr onClick=${() => { location.hash = `#/stock/${r.code}`; }}>
-      ${cols.map(([k]) => cell(r, k))}
+      ${cols.map(([k]) => html`${cell(r, k)}${k === 'name' && watch ? html`<td class="l"><${WatchBtn} code=${r.code} date=${date} source=${source} watch=${watch} /></td>` : ''}`)}
       ${!compact && html`<td class="l">${(r.tags || []).map((t) => html`<span class=${`tag ${tagClass(t)}`}>${t}</span>`)}</td>`}
     </tr>`)}</tbody></table></div>`;
 }
@@ -498,6 +499,7 @@ function Alpha({ preset: initPreset, industry: initIndustry, health }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [sort, setSort] = useState(null);
+  const watch = useWatched();
   useEffect(() => { setPreset(initPreset || 'all'); setIndustry(initIndustry || ''); }, [initPreset, initIndustry]);
   useEffect(() => {
     if (!health?.db?.latest_date) return;
@@ -540,7 +542,7 @@ function Alpha({ preset: initPreset, industry: initIndustry, health }) {
       <div class="mut" style="font-size:12px;padding:10px 16px 0;line-height:1.7">
         總分 = 籌碼 35% ＋ 動能 25% ＋ 成長 25% ＋ 估值 15%。每個指標先在全市場排百分位（0～100），大型股、小型股可以直接比較。
         四因子小圖由左到右：籌碼、動能、成長、估值。</div>
-      ${res ? html`<${AlphaTable} rows=${rows} sort=${sort} onSort=${(k) => setSort(sort?.key === k ? { key: k, dir: -sort.dir } : { key: k, dir: -1 })} />` : html`<div class="empty">計算中…</div>`}
+      ${res ? html`<${AlphaTable} rows=${rows} watch=${watch} source="法人選股" date=${health?.db?.latest_date} sort=${sort} onSort=${(k) => setSort(sort?.key === k ? { key: k, dir: -sort.dir } : { key: k, dir: -1 })} />` : html`<div class="empty">計算中…</div>`}
     </section>`;
 }
 
@@ -941,6 +943,54 @@ function Stock({ code, stocks, health }) {
       </div>`}`;
 }
 
+// ---------------------------------------------------------------- 投信預測
+function HitBars({ days }) {
+  const max = 100;
+  return html`<div class="hitbars">${days.map((d) => html`<div class="hb" title=${`${d.date} 預測 → ${d.next}：命中 ${d.hits}/${d.n}（${d.hit}%），全市場 ${d.base}%`}>
+    <span class="bar" style=${`height:${(d.hit / max) * 100}%`}></span><span class="base" style=${`bottom:${(d.base / max) * 100}%`}></span></div>`)}</div>
+    <div class="mut" style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px"><span>${days[0]?.next}</span><span>${days[days.length - 1]?.next}</span></div>`;
+}
+
+function TrustPage({ health }) {
+  const [r, setR] = useState(null);
+  const [err, setErr] = useState('');
+  const watch = useWatched();
+  useEffect(() => { setR(null); api('/api/trust/predict').then(setR).catch((e) => setErr(e.message)); }, [health?.db?.latest_date]);
+  if (err) return html`<div class="panel"><div class="empty up">${err}</div></div>`;
+  if (!r) return html`<div class="panel"><div class="empty">計算中…（第一次約需 10 秒）</div></div>`;
+  if (!r.ready) return html`<div class="panel"><div class="empty">法人資料只有 ${r.inst_days} 天，至少要 ${r.need} 天才能算機率。
+    請到 <a href="#/settings">資料與設定</a> 按「更新資料庫」，程式會自動回補約 120 天的法人資料。</div></div>`;
+  const bt = r.backtest;
+  return html`
+    <section class="grid g-kpi">
+      <div class="panel pb kpi"><div class="label">資料日期</div><div class="value">${r.asof}</div><div class="subv mut">預測下一個交易日投信動向</div></div>
+      <div class="panel pb kpi"><div class="label">前 20 名命中率（近 ${bt.days.length} 天回測）</div>
+        <div class="value up">${fmt(bt.avg_hit, 1)}%</div><div class="subv mut">隔天投信真的買超的比例</div></div>
+      <div class="panel pb kpi"><div class="label">隨便挑一檔的機率</div><div class="value">${fmt(bt.avg_base, 1)}%</div>
+        <div class="subv mut">全市場平均每天被投信買超的比例</div></div>
+      <div class="panel pb kpi"><div class="label">預測效果</div><div class="value acc">${fmt(bt.lift, 1)} 倍</div>
+        <div class="subv mut">命中率是隨便挑的幾倍</div></div>
+    </section>
+    <section class="panel">
+      <div class="ph">每日命中率<span class="sub">橘色 = 前 20 名命中率 · 灰線 = 全市場平均 · 每天只用當天以前的資料預測，不偷看答案</span></div>
+      <div class="pb"><${HitBars} days=${bt.days} /></div>
+    </section>
+    <section class="panel">
+      <div class="ph">明日投信續買機率排行<span class="sub">依 ${r.asof} 收盤後資料 · 20 日均量 300 張以上 · 機率是歷史統計，不是保證</span></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="l">代號</th><th class="l">名稱</th><th class="l">觀察</th><th>續買機率</th><th>投信連買</th><th>今日投信(張)</th><th>5日投信(張)</th><th>買超佔量</th><th>月線</th><th>收盤</th><th class="l">判斷依據</th></tr></thead>
+        <tbody>${r.rows.map((x) => html`<tr onClick=${() => { location.hash = `#/stock/${x.code}`; }}>
+          <td class="l num acc">${x.code}</td><td class="l">${x.name}</td>
+          <td class="l"><${WatchBtn} code=${x.code} date=${r.asof} source="投信預測" watch=${watch} /></td>
+          <td class="num"><b class=${x.prob >= 60 ? 'up' : x.prob >= 40 ? 'acc' : ''}>${fmt(x.prob, 0)}%</b></td>
+          <td class=${`num ${cls(x.streak)}`}>${x.streak > 0 ? `${x.streak} 天` : x.streak < 0 ? `賣 ${-x.streak} 天` : '—'}</td>
+          <td class=${`num ${cls(x.t1)}`}>${signed(x.t1, 0)}</td><td class=${`num ${cls(x.t5)}`}>${signed(x.t5, 0)}</td>
+          <td class="num">${fmt(x.intensity, 1)}%</td><td>${x.trend === 'up' ? html`<span class="tag up">站上</span>` : html`<span class="tag">跌破</span>`}</td>
+          <td class="num">${fmt(x.close)}</td><td class="l mut" style="font-size:12px;min-width:320px">${x.why}</td></tr>`)}</tbody>
+      </table></div>
+    </section>`;
+}
+
 // ---------------------------------------------------------------- 觀察名單
 const HZ = [['d3', '3 天'], ['d5', '1 週'], ['d10', '2 週']];
 
@@ -1219,6 +1269,7 @@ function App() {
     case 'radar': body = html`<${Radar} initialTactic=${arg} health=${health} />`; break;
     case 'stock': body = html`<${Stock} code=${arg} stocks=${stocks} health=${health} />`; break;
     case 'watch': body = html`<${WatchPage} health=${health} />`; break;
+    case 'trust': body = html`<${TrustPage} health=${health} />`; break;
     case 'positions': body = html`<${Positions} />`; break;
     case 'settings': body = html`<${Settings} health=${health} reload=${load} />`; break;
     default: body = html`<${Overview} health=${health} breadth=${breadth} />`;

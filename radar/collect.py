@@ -111,11 +111,11 @@ def update_chips(store: Store, settings: Settings, http: Http, today: date,
     days = [date.fromisoformat(d) for d in store.trading_days()]
     if not days:
         return
-    recent = list(reversed(days[-settings.chip_trading_days:]))
+    keep = {"inst": settings.inst_trading_days, "margin": settings.chip_trading_days}
     jobs: list[tuple[str, str, date | None]] = []
     for market in ("TWSE", "TPEX"):
         for ds in ("inst", "margin"):
-            jobs += [(market, ds, d) for d in recent]
+            jobs += [(market, ds, d) for d in reversed(days[-keep[ds]:])]
         jobs.append((market, "valuation", days[-1]))
         jobs.append((market, "revenue", None))
     names = {"inst": "三大法人", "margin": "融資融券", "valuation": "本益比", "revenue": "月營收"}
@@ -146,7 +146,7 @@ def update_chips(store: Store, settings: Settings, http: Http, today: date,
             continue
         store.log_fetch(key, log_day, "ok", n)
         report.fetched["籌碼"] += 1
-    store.prune_dated("inst_flows", settings.chip_trading_days)
+    store.prune_dated("inst_flows", settings.inst_trading_days)
     store.prune_dated("margin", settings.chip_trading_days)
     store.prune_dated("valuation", 5)
 
