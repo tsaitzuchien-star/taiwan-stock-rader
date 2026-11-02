@@ -271,3 +271,18 @@ def test_login_false_every_time_explains_certificate(monkeypatch):
     with pytest.raises(YuantaError, match="憑證"):
         c.connect()
     assert len([x for x in t.calls if x[0] == "Login"]) == 3 and not c.logged_in
+
+
+def test_certificate_error_stops_login_retries(monkeypatch):
+    monkeypatch.setattr("radar.yuanta.client.time.sleep", lambda s: None)
+    t = FakeTrader()
+    c, _ = make_client(trader=t)
+
+    def bad_cert(acct, pwd):
+        t.calls.append(("Login", acct))
+        c.on_response(1, 9, "", None, "執行異常，憑證檢核失敗:5010")
+        return False
+    t.Login = bad_cert
+    with pytest.raises(YuantaError, match="憑證"):
+        c.connect()
+    assert len([x for x in t.calls if x[0] == "Login"]) == 1 and not c.logged_in
