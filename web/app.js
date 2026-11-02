@@ -45,7 +45,7 @@ function Spark({ data, w = 84, h = 22 }) {
 
 // ---------------------------------------------------------------- 外框
 const NAV = [
-  ['overview', '總覽'], ['arena', '百萬擂台'], ['alpha', '法人選股'], ['sectors', '產業輪動'], ['radar', '雷達掃描'], ['stock', '個股分析'],
+  ['overview', '總覽'], ['arena', '百萬擂台'], ['alpha', '法人選股'], ['sectors', '產業輪動'], ['radar', '雷達掃描'], ['watch', '觀察名單'], ['stock', '個股分析'],
   ['positions', '持倉風控'], ['settings', '資料與設定'],
 ];
 
@@ -605,17 +605,40 @@ function EntryCard({ m }) {
   </div>`;
 }
 
-function HitTable({ rows, compact, sort, onSort }) {
+function useWatched() {
+  const [items, setItems] = useState([]);
+  const load = () => api('/api/watch').then((r) => setItems(r.rows)).catch(() => {});
+  useEffect(() => { load(); }, []);
+  const add = (code, source) => post('/api/watch', { code, source }).then(load);
+  const has = (code, date, source) => items.some((w) => w.code === code && w.added_date === date && (!source || w.source === source));
+  return { items, add, has };
+}
+
+function WatchBtn({ code, date, source, watch }) {
+  const [busy, setBusy] = useState(false);
+  const done = watch.has(code, date, source);
+  const go = (e) => {
+    e.stopPropagation();
+    if (done || busy) return;
+    setBusy(true);
+    watch.add(code, source).catch((er) => alert(er.message)).finally(() => setBusy(false));
+  };
+  return html`<button type="button" class=${`wbtn ${done ? 'on' : ''}`} onClick=${go} title=${done ? '已加入觀察名單' : '記下今天的價格與進場分數，之後自動追蹤'}>
+    ${done ? '✓ 觀察中' : busy ? '…' : '＋ 觀察'}</button>`;
+}
+
+function HitTable({ rows, compact, sort, onSort, watch, source, date }) {
   if (!rows.length) return html`<div class="empty">沒有符合條件的股票。寧可空手，絕不追高。</div>`;
   const cols = compact ? COLS.filter(([k]) => ['code', 'name', 'entry', 'stage', 'price', 'chg', 'vol', 'vr'].includes(k)) : COLS;
   return html`<div class="tablewrap"><table>
     <thead><tr>
       ${cols.map(([k, label, al]) => html`<th class=${`${al || ''} ${onSort ? 'sortable' : ''} ${sort?.key === k ? 'sorted' : ''}`}
-        onClick=${() => onSort && onSort(k)}>${label}${sort?.key === k ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`)}
+        onClick=${() => onSort && onSort(k)}>${label}${sort?.key === k ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>${k === 'name' && watch ? html`<th class="l">觀察</th>` : ''}`)}
       ${!compact && html`<th>20 日走勢</th>`}<th class="l">訊號</th>
     </tr></thead>
     <tbody>${rows.map((r) => html`<tr onClick=${() => { location.hash = `#/stock/${r.code}`; }}>
       <td class="l num acc">${r.code}</td><td class="l">${r.name}</td>
+      ${watch && html`<td class="l"><${WatchBtn} code=${r.code} date=${date} source=${source} watch=${watch} /></td>`}
       <td><${EntryScore} r=${r} /></td><td><span class=${`tag ${STAGE_CLS[r.stage] || ''}`}>${r.stage}</span></td>
       <td class="num">${fmt(r.price)}</td><td class=${`num ${cls(r.chg)}`}>${signed(r.chg, 2, '%')}</td>
       ${!compact && html`<td class=${`num ${cls(r.bias)}`}>${signed(r.bias, 1, '%')}</td><td class=${`num ${cls(r.ret20)}`}>${signed(r.ret20, 1, '%')}</td>
@@ -650,6 +673,7 @@ function Radar({ initialTactic, health }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [sort, setSort] = useState({ key: 'entry', dir: -1 });
+  const watch = useWatched();
 
   const run = (body) => {
     setBusy(true); setErr('');
@@ -699,7 +723,8 @@ function Radar({ initialTactic, health }) {
         <span class="sub">${res ? `${res.rows.length} 檔符合 · 點欄位排序 · ` : ''}
           ${res?.rows.length ? html`<a href="javascript:void 0" onClick=${() => toCsv(sorted)}>匯出 CSV</a>` : ''}</span></div>
       ${err && html`<div class="empty up">${err}</div>`}
-      ${res ? html`<${HitTable} rows=${sorted} sort=${sort} onSort=${onSort} />` : html`<div class="empty">計算中…</div>`}
+      ${res ? html`<${HitTable} rows=${sorted} sort=${sort} onSort=${onSort} watch=${watch}
+        source=${tactics.find((t) => t.id === tactic)?.name || '自訂掃描'} date=${res.latest} />` : html`<div class="empty">計算中…</div>`}
     </section>
   </div>`;
 }
@@ -848,6 +873,7 @@ function Stock({ code, stocks, health }) {
   const [tf, setTf] = useState('D');
   const [chips, setChips] = useState(null);
   const [err, setErr] = useState('');
+  const watch = useWatched();
   useEffect(() => {
     if (!code) return;
     setData(null); setChart(null); setChips(null); setErr(''); setTf('D');
@@ -881,6 +907,7 @@ function Stock({ code, stocks, health }) {
           <span><span class="mut">低</span> <span class="num">${fmt(last.low)}</span></span>
           <span><span class="mut">量</span> <span class="num">${fmt(last.volume, 0)} 張</span></span>
         </div>
+        ${m && html`<${WatchBtn} code=${data.code} date=${health?.db?.latest_date} source="個股分析" watch=${watch} />`}
       </section>
       <div class="row">
         <div class="panel" style="flex:999 1 560px">
@@ -912,6 +939,59 @@ function Stock({ code, stocks, health }) {
           <${Defense} code=${code} price=${last?.close} health=${health} />
         </div>
       </div>`}`;
+}
+
+// ---------------------------------------------------------------- 觀察名單
+const HZ = [['d3', '3 天'], ['d5', '1 週'], ['d10', '2 週']];
+
+function WatchStats({ title, sub, list }) {
+  if (!list?.length) return null;
+  const cell = (s) => (s.n ? html`<span class=${`num ${cls(s.avg)}`}>${signed(s.avg, 1, '%')}</span>
+    <div class="eparts num">勝率 ${s.win}% · 贏0050 ${s.beat ?? '—'}% · ${s.n} 筆</div>` : html`<span class="mut">尚無資料</span>`);
+  return html`<section class="panel">
+    <div class="ph">${title}<span class="sub">${sub}</span></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th class="l">${title === '各戰術準確度' ? '戰術 / 來源' : '進場分數'}</th><th>筆數</th>
+        ${HZ.map(([, l]) => html`<th>${l}後平均</th>`)}<th>至今平均</th></tr></thead>
+      <tbody>${list.map((s) => html`<tr class=${s.name === '全部' ? 'tot' : ''}>
+        <td class="l">${s.name}</td><td class="num">${s.n}</td>
+        ${HZ.map(([k]) => html`<td>${cell(s[k])}</td>`)}
+        <td class=${`num ${cls(s.ret_avg)}`}>${signed(s.ret_avg, 1, '%')}</td></tr>`)}</tbody>
+    </table></div>
+  </section>`;
+}
+
+function WatchPage({ health }) {
+  const [rep, setRep] = useState(null);
+  const [err, setErr] = useState('');
+  const load = () => api('/api/watch').then(setRep).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, [health?.db?.latest_date]);
+  const del = (w) => { if (confirm(`把 ${w.code} ${w.name}（${w.added_date} 加入）從觀察名單移除？`)) api(`/api/watch/${w.id}`, { method: 'DELETE' }).then(load); };
+  const pct = (v, bench) => (v == null ? html`<span class="mut">—</span>` : html`<span class=${`num ${cls(v)}`}>${signed(v, 1, '%')}</span>
+    ${bench != null && html`<div class="eparts num">0050 ${signed(bench, 1, '%')}</div>`}`);
+  if (err) return html`<div class="panel"><div class="empty up">${err}</div></div>`;
+  if (!rep) return html`<div class="panel"><div class="empty">讀取中…</div></div>`;
+  return html`
+    <section class="panel">
+      <div class="ph">觀察名單<span class="sub">以加入當天收盤價為基準 · 3 天／1 週／2 週 = 之後第 3／5／10 個交易日收盤</span></div>
+      ${!rep.rows.length ? html`<div class="empty">還沒有觀察的股票。到 <a href="#/radar">雷達掃描</a> 或個股分析按「＋ 觀察」，就會記下當天的價格和進場分數。</div>` : html`
+      <div class="tablewrap"><table>
+        <thead><tr><th class="l">代號</th><th class="l">名稱</th><th class="l">來源</th><th class="l">加入日</th><th>加入價</th><th>進場分數</th>
+          ${HZ.map(([, l]) => html`<th>${l}後</th>`)}<th>至今</th><th>期間最高</th><th>期間最低</th><th class="l">狀態</th><th></th></tr></thead>
+        <tbody>${rep.rows.map((w) => html`<tr onClick=${() => { location.hash = `#/stock/${w.code}`; }}>
+          <td class="l num acc">${w.code}</td><td class="l">${w.name}</td><td class="l mut">${w.source}</td>
+          <td class="l num">${w.added_date}</td><td class="num">${fmt(w.price)}</td>
+          <td><${EntryScore} r=${{ ...w, entry_parts: w.parts }} /></td>
+          ${HZ.map(([k]) => html`<td>${pct(w[k], w[`${k}_bench`])}</td>`)}
+          <td>${pct(w.ret, w.bench_ret)}<div class="eparts num">${w.last != null ? `現價 ${fmt(w.last)}` : ''}</div></td>
+          <td class=${`num ${cls(w.max_up)}`}>${w.max_up == null ? '—' : signed(w.max_up, 1, '%')}</td>
+          <td class=${`num ${cls(w.max_dn)}`}>${w.max_dn == null ? '—' : signed(w.max_dn, 1, '%')}</td>
+          <td class="l mut" style="white-space:nowrap">${w.days >= 10 ? '已滿 2 週' : `第 ${w.days} 個交易日`}</td>
+          <td><button type="button" class="wbtn" onClick=${(e) => { e.stopPropagation(); del(w); }}>移除</button></td>
+        </tr>`)}</tbody></table></div>`}
+    </section>
+    <${WatchStats} title="各戰術準確度" sub="勝率 = 上漲的比例 · 贏0050 = 漲得比同期 0050 多的比例" list=${rep.stats} />
+    <${WatchStats} title="進場分數準確度" sub="分數越高的，之後是不是真的漲得比較多" list=${rep.buckets} />`;
 }
 
 // ---------------------------------------------------------------- 持倉（第二批）
@@ -1138,6 +1218,7 @@ function App() {
     case 'sectors': body = html`<${Sectors} health=${health} />`; break;
     case 'radar': body = html`<${Radar} initialTactic=${arg} health=${health} />`; break;
     case 'stock': body = html`<${Stock} code=${arg} stocks=${stocks} health=${health} />`; break;
+    case 'watch': body = html`<${WatchPage} health=${health} />`; break;
     case 'positions': body = html`<${Positions} />`; break;
     case 'settings': body = html`<${Settings} health=${health} reload=${load} />`; break;
     default: body = html`<${Overview} health=${health} breadth=${breadth} />`;
