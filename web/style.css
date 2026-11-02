@@ -225,3 +225,11 @@ tr.why td { white-space: normal; background: var(--bar); padding: 10px 14px 12px
 .buyline { color: var(--text-2); font-size: 13px; }
 .buyline b { color: var(--text); font-weight: 600; }
 .whylist { margin: 4px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; line-height: 1.8; white-space: normal; }
+
+/* 進場分數 */
+.entry { white-space: nowrap; }
+.entry b { font-size: 15px; }
+.entry.green b { color: var(--down); }
+.entry.yellow b { color: var(--accent); }
+.entry.red b { color: var(--up); }
+.eparts { font-size: 10.5px; color: var(--muted); white-space: nowrap; margin-top: 2px; }

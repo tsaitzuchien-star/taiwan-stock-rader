@@ -1,6 +1,6 @@
 """盤後批次收集器：把 TWSE / TPEx 全市場日 K 存進本地資料庫。
 
-第一次執行會回補約 90 個交易日（每個市場每天 1 個請求，約 5～10 分鐘）；
+第一次執行會回補約 240 個交易日（約 1 年；每個市場每天 1 個請求，第一次約 25 分鐘，之後每天只補新的一天）；
 之後每天只需補最新 1 天，幾秒鐘完成。
 
 用法（在專案資料夾執行）：
@@ -153,7 +153,7 @@ def update_chips(store: Store, settings: Settings, http: Http, today: date,
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="下載 TWSE / TPEx 全市場日 K 到本地資料庫")
-    parser.add_argument("--days", type=int, help="保留的交易日數（預設 90）")
+    parser.add_argument("--days", type=int, help="保留的交易日數（預設 240）")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     settings = load_settings()

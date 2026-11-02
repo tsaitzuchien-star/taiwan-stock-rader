@@ -9,6 +9,7 @@ COLUMNS = [
     '股票代號', '股票名稱', '現價(元)', '今日漲跌(%)', '日內振幅(%)', '五日均量(張)', '月均量(20日)',
     '今日成交(張)', '月量爆發倍數', '多空力道', '成長K線', '跳空缺口(%)', '布林帶寬(%)',
     '均線糾結(%)', '季線位置', '強力洗盘訊號', '_is_fake', '_is_washout',
+    '季線乖離(%)', '20日漲幅(%)', '前期布林寬(%)', '_close_pos',
 ]
 
 
@@ -46,6 +47,14 @@ def stock_metrics(code: str, name: str, df: pd.DataFrame) -> dict | None:
     upper_shadow = high_p - max(close_p, open_p)
     is_growth_candle = body_pct >= 3.0 and today_vol > vol5 and upper_shadow <= range_hl * 0.25
 
+    # 位階判斷用：離季線多遠、近 20 日漲多少、發動前（5 天前那 20 天）盤得多緊、收在當日區間哪裡
+    closes = df['Close']
+    ret20 = (close_p / float(closes.iloc[-21]) - 1) * 100 if len(closes) > 20 and closes.iloc[-21] else 0.0
+    pre = closes.iloc[-25:-5]
+    pre_mean = float(pre.mean())
+    pre_bw = 4 * float(pre.std()) / pre_mean * 100 if pre_mean > 0 else 999
+    close_pos = (close_p - low_p) / range_hl if range_hl > 0 else 0.5
+
     return {
         '股票代號': code,
         '股票名稱': name,
@@ -65,6 +74,10 @@ def stock_metrics(code: str, name: str, df: pd.DataFrame) -> dict | None:
         '強力洗盘訊號': '🚨 觸發' if is_panic_washed else '-',
         '_is_fake': bool(is_fake),
         '_is_washout': is_panic_washed,
+        '季線乖離(%)': round((close_p / ma60 - 1) * 100, 2) if ma60 > 0 else 0.0,
+        '20日漲幅(%)': round(ret20, 2),
+        '前期布林寬(%)': round(pre_bw, 2),
+        '_close_pos': round(close_pos, 3),
     }
 
 

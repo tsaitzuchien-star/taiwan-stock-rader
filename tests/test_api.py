@@ -93,3 +93,24 @@ def test_web_files_are_not_cached_stale(client):
     r = client.get("/static/app.js")
     assert r.status_code == 200 and r.headers["cache-control"] == "no-cache"
     assert client.get("/").headers["cache-control"] == "no-cache"
+
+
+def test_stock_weekly_and_monthly(client):
+    d = client.get("/api/stock/6488").json()
+    w = client.get("/api/stock/6488", params={"tf": "W"}).json()
+    m = client.get("/api/stock/6488", params={"tf": "M"}).json()
+    assert w["tf"] == "W" and m["tf"] == "M" and d["tf"] == "D"
+    assert len(m["candles"]) < len(w["candles"]) < len(d["candles"])
+    # 週 K：開盤是該週第一天開盤、收盤是最後一天收盤、量是加總
+    last_w, days = w["candles"][-1], [c for c in d["candles"] if c["time"] > w["candles"][-2]["time"]]
+    assert last_w["time"] == days[-1]["time"] and last_w["open"] == days[0]["open"]
+    assert last_w["close"] == days[-1]["close"] and last_w["high"] == max(c["high"] for c in days)
+    assert abs(last_w["volume"] - sum(c["volume"] for c in days)) <= len(days)
+
+
+def test_scan_rows_have_entry_score(client):
+    r = client.post("/api/scan", json={"tactic": "dive", "params": {"p": 9999, "v": 1e9, "tv": 0, "pm": 0}}).json()
+    assert r["rows"]
+    for row in r["rows"]:
+        assert 0 <= row["entry"] <= 100 and row["light"] in ("green", "yellow", "red")
+        assert set(row["entry_parts"]) == {"pos", "brk", "base", "chip"} and len(row["reasons"]) == 4
