@@ -202,6 +202,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="台股雷達戰情室", docs_url="/api/docs", redoc_url=None)
     app.state.engine = engine
 
+    @app.middleware("http")
+    async def _no_stale_web(request, call_next):
+        """網頁檔案每次都跟伺服器確認版本，更新程式後不用手動清瀏覽器暫存。"""
+        resp = await call_next(request)
+        path = request.url.path
+        if path == "/" or (path.startswith("/static/") and "/vendor/" not in path):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     @app.on_event("shutdown")
     def _logout_yuanta():
         try:
