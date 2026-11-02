@@ -45,7 +45,7 @@ function Spark({ data, w = 84, h = 22 }) {
 
 // ---------------------------------------------------------------- 外框
 const NAV = [
-  ['overview', '總覽'], ['alpha', '法人選股'], ['sectors', '產業輪動'], ['radar', '雷達掃描'], ['stock', '個股分析'],
+  ['overview', '總覽'], ['arena', '百萬擂台'], ['alpha', '法人選股'], ['sectors', '產業輪動'], ['radar', '雷達掃描'], ['stock', '個股分析'],
   ['positions', '持倉風控'], ['settings', '資料與設定'],
 ];
 
@@ -115,6 +115,7 @@ function Overview({ health, breadth }) {
         <div class="subv mut">收盤 ≥ 60 日均線</div></div>
     </section>
     ${err && html`<div class="toast">${err}</div>`}
+    <${ArenaCard} />
     <section class="grid g-2">
       <div class="panel">
         <div class="ph">法人綜合評分 前 10 名<span class="sub"><a href="#/alpha">看全部</a></span></div>
@@ -160,6 +161,194 @@ function Overview({ health, breadth }) {
         <div class="empty">接上元大即時報價後，跌破季線、爆量等事件會在這裡即時跳出（第二批）。</div>
       </div>
     </section>`;
+}
+
+// ---------------------------------------------------------------- 百萬操盤擂台
+function useArena() {
+  const [a, setA] = useState(null);
+  const [err, setErr] = useState('');
+  const load = () => api('/api/arena').then((r) => { setA(r); setErr(''); }).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, []);
+  useEffect(() => {   // 第一次開賽在背景回測：每 3 秒看一下好了沒
+    if (!a?.running) return undefined;
+    const t = setTimeout(load, 3000);
+    return () => clearTimeout(t);
+  }, [a]);
+  return [a, err, load, setA];
+}
+
+const won = (v) => (v == null ? '—' : `${Math.round(v).toLocaleString('zh-TW')}`);
+
+function Grade({ g, big }) {
+  const letter = g?.letter || '—';
+  return html`<span class=${`grade g-${letter === '—' ? 'na' : letter}${big ? ' big' : ''}`} title="操盤評分">
+    <b>${letter}</b>${g?.score != null && html`<small class="num">${g.score} 分</small>`}</span>`;
+}
+
+function CurveSpark({ curve, w = 260, h = 64 }) {
+  if (!curve || curve.length < 2) return null;
+  const vals = curve.flatMap((p) => [p.nav, p.bench].filter((v) => v != null));
+  const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const xy = (i, v) => `${(i / (curve.length - 1) * w).toFixed(1)},${(h - 3 - (v - lo) / span * (h - 6)).toFixed(1)}`;
+  const line = (k) => curve.map((p, i) => (p[k] == null ? null : xy(i, p[k]))).filter(Boolean).join(' ');
+  return html`<svg class="cspark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="擂台淨值與 0050 走勢">
+    <polyline points=${line('bench')} fill="none" stroke=${C.blue} stroke-width="1.2" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" />
+    <polyline points=${line('nav')} fill="none" stroke=${C.accent} stroke-width="2" vector-effect="non-scaling-stroke" /></svg>`;
+}
+
+function ArenaWaiting({ a, err }) {
+  if (err) return html`<div class="empty">擂台暫時讀不到：${err}</div>`;
+  if (!a) return html`<div class="empty">讀取中…</div>`;
+  if (a.running) return html`<div class="empty">第一次開賽：正在用最近幾週的資料回測，約需 1 分鐘…</div>`;
+  if (a.error) return html`<div class="empty">擂台計算失敗：${a.error}</div>`;
+  return html`<div class="empty">資料庫至少要 61 個交易日的日 K 才能開賽（要算季線）。請先到「資料與設定」更新資料庫。</div>`;
+}
+
+function ArenaCard() {
+  const [a, err] = useArena();
+  const ready = a?.ready;
+  const buys = (a?.orders || []).filter((o) => o.side === 'buy');
+  const sells = (a?.orders || []).filter((o) => o.side === 'sell');
+  return html`<section class="panel arena-card">
+    <div class="ph">🏆 ${a?.name || '百萬操盤擂台'}<span class="sub">模擬操盤 100 萬，不是真的下單 · <a href="#/arena">看完整成績</a></span></div>
+    ${!ready ? html`<${ArenaWaiting} a=${a} err=${err} />` : html`<a class="ac-body" href="#/arena">
+      <div class="ac-kpi"><div class="label">目前總資產</div><div class="value num">${won(a.nav)}</div>
+        <div class=${`subv num ${cls(a.total_ret)}`}>${signed(a.total_ret, 2, '%')}（${signed(a.nav - a.start_cash, 0)} 元）</div></div>
+      <div class="ac-kpi"><div class="label">同期 0050</div><div class=${`value num ${cls(a.bench_total)}`}>${signed(a.bench_total, 2, '%')}</div>
+        <div class=${`subv num ${cls(a.excess)}`}>${a.excess == null ? '—' : `${a.excess >= 0 ? '贏' : '輸'} ${fmt(Math.abs(a.excess), 2)}%`}</div></div>
+      <div class="ac-kpi"><div class="label">操盤評分</div><div class="value"><${Grade} g=${a.grade} /></div>
+        <div class="subv mut">${a.trading_days} 個交易日 · 勝率 ${a.win_rate == null ? '—' : fmt(a.win_rate, 0) + '%'}</div></div>
+      <div class="ac-curve"><${CurveSpark} curve=${a.curve} />
+        <div class="legend"><span><i style=${`background:${C.accent}`}></i>擂台</span><span><i style=${`background:${C.blue}`}></i>0050</span></div></div>
+      <div class="ac-orders"><div class="label">明天開盤</div>
+        ${!buys.length && !sells.length ? html`<div class="mut">不動作，續抱 ${a.positions.length} 檔</div>` : html`
+          ${buys.slice(0, 4).map((o) => html`<div><span class="tag up">買</span>${o.code} ${o.name}</div>`)}
+          ${sells.slice(0, 4).map((o) => html`<div><span class="tag dn">賣</span>${o.code} ${o.name}</div>`)}`}
+      </div></a>`}
+  </section>`;
+}
+
+function EquityChart({ curve }) {
+  const el = useRef(null);
+  useEffect(() => {
+    if (!el.current || !curve?.length) return undefined;
+    const chart = createChart(el.current, {
+      autoSize: true,
+      layout: { background: { color: 'transparent' }, textColor: C.muted, fontFamily: 'Consolas, monospace' },
+      grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
+      rightPriceScale: { borderColor: C.line }, timeScale: { borderColor: C.line },
+      localization: { locale: 'zh-TW', dateFormat: 'yyyy-MM-dd', priceFormatter: (v) => Math.round(v).toLocaleString('zh-TW') },
+    });
+    const bench = chart.addSeries(LineSeries, { color: C.blue, lineWidth: 1.5, lineStyle: 2, priceLineVisible: false, title: '0050' });
+    bench.setData(curve.filter((p) => p.bench != null).map((p) => ({ time: p.date, value: p.bench })));
+    const nav = chart.addSeries(LineSeries, { color: C.accent, lineWidth: 2.5, priceLineVisible: false, title: '擂台' });
+    nav.setData(curve.map((p) => ({ time: p.date, value: p.nav })));
+    const base = nav.createPriceLine({ price: 1_000_000, color: '#3A4458', lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: '本金' });
+    chart.timeScale().fitContent();
+    return () => { nav.removePriceLine(base); chart.remove(); };
+  }, [curve]);
+  return html`<div class="chart eq" ref=${el}></div>`;
+}
+
+function ArenaPage({ health }) {
+  const [a, err, load, setA] = useArena();
+  const [busy, setBusy] = useState(false);
+  const reset = async () => {
+    if (!confirm('確定要重新開賽嗎？目前的成績會清掉，從頭回測。')) return;
+    setBusy(true);
+    try { setA(await post('/api/arena/reset')); } catch (e) { alert(e.message); }
+    setBusy(false);
+  };
+  if (health && !health.db.latest_date) return html`<${EmptyDb} />`;
+  const rules = a?.rules;
+  const go = (code) => { location.hash = `#/stock/${code}`; };
+  return html`
+    <div class="panel"><div class="ph">🏆 ${a?.name || '百萬操盤擂台'}
+      <span class="sub">雷達用法人評分每天模擬操作 100 萬元（不是真的下單）·
+        ${a?.ready ? html`開賽 ${a.start}${a.live_since ? ` · ${a.live_since} 起為實戰` : ` · ${a.last} 以前為回測，下一個交易日起實戰`}` : ''}</span></div>
+      ${!a?.ready && html`<${ArenaWaiting} a=${a} err=${err} />`}
+    </div>
+    ${a?.ready && html`
+    <section class="grid g-kpi">
+      <div class="panel pb kpi"><div class="label">目前總資產</div><div class="value">${won(a.nav)}</div>
+        <div class="subv mut">現金 ${won(a.cash)}</div></div>
+      <div class="panel pb kpi"><div class="label">總報酬</div><div class=${`value ${cls(a.total_ret)}`}>${signed(a.total_ret, 2, '%')}</div>
+        <div class=${`subv ${cls(a.total_ret)}`}>${signed(a.nav - a.start_cash, 0)} 元</div></div>
+      <div class="panel pb kpi"><div class="label">同期 0050</div><div class=${`value ${cls(a.bench_total)}`}>${signed(a.bench_total, 2, '%')}</div>
+        <div class=${`subv ${cls(a.excess)}`}>超額 ${signed(a.excess, 2, '%')}</div></div>
+      <div class="panel pb kpi"><div class="label">操盤評分</div><div class="value"><${Grade} g=${a.grade} big /></div>
+        <div class="subv mut">最大回檔 ${fmt(a.mdd, 1)}%</div></div>
+      <div class="panel pb kpi"><div class="label">已出場 / 勝率</div><div class="value">${a.closed} <span class="mut" style="font-size:16px">筆</span></div>
+        <div class="subv mut">勝率 ${a.win_rate == null ? '—' : fmt(a.win_rate, 0) + '%'}${a.live_ret != null ? ` · 實戰 ${signed(a.live_ret, 2, '%')}` : ''}</div></div>
+    </section>
+    <section class="grid g-2">
+      <div class="panel">
+        <div class="ph">資產曲線<span class="sub"><span style=${`color:${C.accent}`}>━ 擂台</span>　<span style=${`color:${C.blue}`}>┅ 0050</span>　起點都是 100 萬</span></div>
+        <${EquityChart} curve=${a.curve} />
+      </div>
+      <div class="panel">
+        <div class="ph">成績單<span class="sub">以交易日計：1 週 = 5 天、1 個月 = 20 天</span></div>
+        <div class="tablewrap"><table>
+          <thead><tr><th class="l">期間</th><th>擂台</th><th>0050</th><th>贏 / 輸</th><th>最大回檔</th><th>評分</th></tr></thead>
+          <tbody>${a.periods.map((p) => html`<tr class="nohover">
+            <td class="l">${p.label}</td>
+            ${p.ret == null ? html`<td colspan="5" class="mut">還沒滿 ${p.days} 個交易日</td>` : html`
+              <td class=${`num ${cls(p.ret)}`}>${signed(p.ret, 2, '%')}</td>
+              <td class=${`num ${cls(p.bench)}`}>${signed(p.bench, 2, '%')}</td>
+              <td class=${`num ${cls(p.excess)}`}>${signed(p.excess, 2, '%')}</td>
+              <td class="num mut">${fmt(p.mdd, 1)}%</td>
+              <td><${Grade} g=${p.grade} /></td>`}</tr>`)}</tbody>
+        </table></div>
+        <div class="pb mut small">評分 = 60 分起跳，每贏 0050 1% 加 4 分；最大回檔超過 5% 的部分每 1% 扣 1.5 分。S ≥ 90、A ≥ 75、B ≥ 60、C ≥ 45。</div>
+      </div>
+    </section>
+    <section class="grid g-2">
+      <div class="panel">
+        <div class="ph">目前持股<span class="sub">${a.positions.length} / 8 檔 · 收盤價計算</span></div>
+        ${!a.positions.length ? html`<div class="empty">目前空手，等符合條件的股票出現。</div>` : html`<div class="tablewrap"><table>
+          <thead><tr><th class="l">股票</th><th>股數</th><th>成本</th><th>現價</th><th>市值</th><th>損益</th><th>比重</th><th>持有</th></tr></thead>
+          <tbody>${a.positions.map((p) => html`<tr onClick=${() => go(p.code)}>
+            <td class="l"><span class="num acc">${p.code}</span> ${p.name}</td>
+            <td class="num">${p.shares.toLocaleString()}</td><td class="num">${fmt(p.avg, 2)}</td><td class="num">${fmt(p.last, 2)}</td>
+            <td class="num">${won(p.value)}</td>
+            <td class=${`num ${cls(p.pnl)}`}>${signed(p.pnl, 0)}<br /><small>${signed(p.pnl_pct, 1, '%')}</small></td>
+            <td class="num mut">${fmt(p.weight, 1)}%</td><td class="num mut">${p.days} 日</td></tr>`)}</tbody>
+        </table></div>`}
+      </div>
+      <div class="panel">
+        <div class="ph">明天開盤要做的事<span class="sub">${a.last} 收盤後決定，照開盤價成交</span></div>
+        ${!a.orders.length ? html`<div class="empty">明天不動作，持股續抱。</div>` : html`<div class="tablewrap"><table>
+          <thead><tr><th class="l">動作</th><th class="l">股票</th><th class="l">理由</th><th>預計金額</th></tr></thead>
+          <tbody>${a.orders.map((o) => html`<tr onClick=${() => go(o.code)}>
+            <td class="l"><span class=${`tag ${o.side === 'buy' ? 'up' : 'dn'}`}>${o.side === 'buy' ? '買進' : '賣出'}</span></td>
+            <td class="l"><span class="num acc">${o.code}</span> ${o.name}</td><td class="l mut">${o.reason}</td>
+            <td class="num">${o.side === 'buy' ? won(o.budget) : '全部'}</td></tr>`)}</tbody>
+        </table></div>`}
+      </div>
+    </section>
+    <div class="panel">
+      <div class="ph">交易紀錄<span class="sub">最近 60 筆 · 已扣手續費與證交稅</span></div>
+      ${!a.recent_trades.length ? html`<div class="empty">還沒有成交。</div>` : html`<div class="tablewrap"><table>
+        <thead><tr><th class="l">日期</th><th class="l">動作</th><th class="l">股票</th><th>股數</th><th>成交價</th><th>金額</th><th>費用</th><th>損益</th><th class="l">理由</th></tr></thead>
+        <tbody>${a.recent_trades.map((t) => html`<tr onClick=${() => go(t.code)}>
+          <td class="l num mut">${t.date}</td>
+          <td class="l"><span class=${`tag ${t.side === 'buy' ? 'up' : 'dn'}`}>${t.side === 'buy' ? '買' : '賣'}</span></td>
+          <td class="l"><span class="num acc">${t.code}</span> ${t.name}</td>
+          <td class="num">${t.shares.toLocaleString()}</td><td class="num">${fmt(t.price, 2)}</td><td class="num">${won(t.amount)}</td>
+          <td class="num mut">${won(t.fee + t.tax)}</td>
+          <td class=${`num ${cls(t.pnl)}`}>${t.pnl == null ? '' : html`${signed(t.pnl, 0)} <small>${signed(t.pnl_pct, 1, '%')}</small>`}</td>
+          <td class="l mut">${t.reason}</td></tr>`)}</tbody>
+      </table></div>`}
+    </div>`}
+    ${rules && html`<div class="panel">
+      <div class="ph">操盤守則<span class="sub">規則固定、每天照表操課，不看盤中、不憑感覺
+        ${a?.ready && html` · <button class="linkbtn" disabled=${busy || a.running} onClick=${reset}>重新開賽</button>`}</span></div>
+      <div class="grid g-3 pb rules">
+        <div><h4 class="up">何時買</h4><ul>${rules.entry.map((x) => html`<li>${x}</li>`)}</ul></div>
+        <div><h4 class="dn">何時賣</h4><ul>${rules.exit.map((x) => html`<li>${x}</li>`)}</ul></div>
+        <div><h4 class="acc">怎麼成交</h4><ul>${rules.execution.map((x) => html`<li>${x}</li>`)}</ul></div>
+      </div>
+    </div>`}`;
 }
 
 function EmptyDb() {
@@ -713,6 +902,7 @@ function App() {
   useEffect(load, []);
   let body;
   switch (page) {
+    case 'arena': body = html`<${ArenaPage} health=${health} />`; break;
     case 'alpha': body = html`<${Alpha} preset=${arg} industry=${arg2} health=${health} />`; break;
     case 'sectors': body = html`<${Sectors} health=${health} />`; break;
     case 'radar': body = html`<${Radar} initialTactic=${arg} health=${health} />`; break;

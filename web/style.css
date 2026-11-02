@@ -172,3 +172,36 @@ tbody tr:hover td { background: var(--panel-2); }
 .tile b { font-size: 13px; font-weight: 600; } .tile .big { font-size: 20px; font-weight: 600; }
 .tile .small { font-size: 11px; opacity: .8; }
 .chipsvg { width: 100%; height: auto; display: block; }
+
+/* 百萬操盤擂台 */
+.arena-card .ac-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 16px;
+  padding: 16px; color: var(--text); align-items: center; }
+.arena-card .ac-body:hover { background: var(--panel-2); }
+.ac-kpi .label, .ac-orders .label { color: var(--muted); font-size: 12px; }
+.ac-kpi .value { font-family: var(--mono); font-size: 24px; font-weight: 600; margin-top: 6px; }
+.ac-kpi .subv { font-size: 13px; margin-top: 4px; }
+.ac-curve { min-width: 0; }
+.cspark { width: 100%; height: 64px; display: block; }
+.legend { display: flex; gap: 12px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.legend i { display: inline-block; width: 10px; height: 3px; margin-right: 4px; vertical-align: middle; }
+.ac-orders { font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.ac-orders .label { margin-bottom: 2px; }
+.grade { display: inline-flex; align-items: baseline; gap: 6px; }
+.grade b { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; font-size: 15px;
+  border: 2px solid currentColor; font-family: var(--mono); }
+.grade small { font-size: 12px; color: var(--muted); }
+.grade.big b { width: 40px; height: 40px; font-size: 20px; }
+.g-S { color: #FFD15C; } .g-A { color: var(--up); } .g-B { color: var(--accent); } .g-C { color: var(--blue); }
+.g-D { color: var(--down); } .g-na { color: var(--muted); }
+.chart.eq { height: 320px; }
+tr.nohover { cursor: default; }
+td small { color: var(--muted); }
+.small { font-size: 12px; line-height: 1.7; }
+.rules h4 { margin: 0 0 8px; font-size: 13px; }
+.rules ul { margin: 0; padding-left: 18px; line-height: 1.9; font-size: 13px; color: var(--text-2); }
+.linkbtn { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; font-size: 12px; }
+.linkbtn:disabled { color: var(--muted); cursor: default; }
+@media (max-width: 760px) {
+  .ph { flex-wrap: wrap; }
+  .ph .sub { flex-basis: 100%; }
+}

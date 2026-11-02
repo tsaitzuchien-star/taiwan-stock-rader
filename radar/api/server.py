@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .. import alpha as radar_alpha
+from .. import arena as radar_arena
 from .. import collect as radar_collect
 from ..config import ROOT, Settings, load_settings
 from ..defense import evaluate as defense_evaluate
@@ -46,6 +47,8 @@ class Engine:
         self._cache: dict | None = None
         self._alpha: dict | None = None
         self.update_job: dict = {"running": False}
+        self.arena_job: dict = {"running": False}
+        self._arena_lock = threading.Lock()
 
     def health(self) -> dict:
         with self.lock:
@@ -108,6 +111,50 @@ class Engine:
                                         "revenue_ym": key[4],
                                         "with_chips": int(df["f5"].notna().sum()) if not df.empty else 0}}
             return self._alpha
+
+
+    # ---------------------------------------------------------------- 百萬操盤擂台
+    def arena_refresh(self) -> None:
+        """有新交易日就在背景補算（第一次開賽要回測幾週，約需數十秒）。"""
+        if self.update_job.get("running") or not self._arena_lock.acquire(blocking=False):
+            return
+        try:
+            with self.lock:
+                pending = radar_arena.Arena(self.store).pending()
+        except Exception:  # noqa: BLE001
+            self._arena_lock.release()
+            raise
+        if not pending:
+            self._arena_lock.release()
+            return
+        self.arena_job.update({"running": True, "error": None})
+
+        def run():
+            store = Store(self.settings.db_path)   # 自己的連線，不卡住畫面查詢
+            try:
+                radar_arena.Arena(store).run()
+            except Exception as e:  # noqa: BLE001
+                self.arena_job["error"] = str(e)
+            finally:
+                store.close()
+                self.arena_job["running"] = False
+                self._arena_lock.release()
+        threading.Thread(target=run, daemon=True).start()
+
+    def arena_report(self) -> dict:
+        self.arena_refresh()
+        with self.lock:
+            rep = radar_arena.Arena(self.store).report()
+        rep["running"] = self.arena_job.get("running", False)
+        rep["error"] = self.arena_job.get("error")
+        return rep
+
+    def arena_reset(self) -> dict:
+        if self.arena_job.get("running"):
+            raise HTTPException(409, "擂台正在計算中，請稍後再試")
+        with self.lock:
+            radar_arena.Arena(self.store).reset()
+        return self.arena_report()
 
 
 class ScanRequest(BaseModel):
@@ -293,6 +340,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "coverage": a["coverage"],
         }
 
+    @app.get("/api/arena")
+    def arena():
+        return engine.arena_report()
+
+    @app.post("/api/arena/reset")
+    def arena_reset():
+        return engine.arena_reset()
+
     @app.post("/api/db/update")
     def db_update():
         job = engine.update_job
@@ -315,6 +370,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 engine.invalidate()
                 job.update({"running": False, "progress": 1.0,
                             "finished": datetime.now().isoformat(timespec="seconds")})
+                engine.arena_refresh()   # 新的交易日：擂台自動補算
         threading.Thread(target=run, daemon=True).start()
         return job
 
