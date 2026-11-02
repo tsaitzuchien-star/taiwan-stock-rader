@@ -148,7 +148,7 @@ def test_update_chips_logs_and_isolates_errors(db):
     fetchers = {"inst": inst, "margin": lambda h, m, d: [], "valuation": lambda h, m, d: [],
                 "revenue": lambda h, m: ([("1101", "2026-10", 1.0, 1.0, 1.0, 1.0)], [("1101", "水泥")])}
     report = collect.CollectReport()
-    s = Settings(db_path=db, chip_trading_days=5)
+    s = Settings(db_path=db, chip_trading_days=5, inst_trading_days=5)
     collect.update_chips(store, s, http=None, today=date(2026, 10, 31), progress=lambda *a: None,
                          report=report, fetchers=fetchers)
     assert sum(1 for m, _ in calls if m == "TWSE") == 5

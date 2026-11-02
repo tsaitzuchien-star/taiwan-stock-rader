@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from .. import alpha as radar_alpha
 from .. import arena as radar_arena
 from .. import entry as radar_entry
+from .. import trust as radar_trust
 from .. import watch as radar_watch
 from .. import collect as radar_collect
 from .. import positions as radar_positions
@@ -119,6 +120,20 @@ class Engine:
                                         "with_chips": int(df["f5"].notna().sum()) if not df.empty else 0}}
             return self._alpha
 
+
+    def trust_predict(self) -> dict:
+        """投信明日續買預測（依法人資料與日 K 的最新日期快取）。"""
+        cache = self.metrics()
+        with self.lock:
+            key = (cache["latest"], self.store.latest_dataset_date("inst"))
+            if getattr(self, "_trust", None) and self._trust["key"] == key:
+                return self._trust["data"]
+            inst = self.store.dataset("inst")
+            names = dict(zip(*self.store.stocks()[["code", "name"]].T.values))
+        data = radar_trust.predict(inst, cache["bars"], names)
+        with self.lock:
+            self._trust = {"key": key, "data": data}
+        return data
 
     def alpha_lookup(self) -> dict[str, dict]:
         """進場分數用的法人評分；籌碼資料有問題時不要讓掃描整個失敗。"""
@@ -477,6 +492,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return radar_arena._clean(radar_positions.realized_summary(engine.yuanta.realized(min(max(days, 1), 365))))
         except YuantaError as e:
             raise HTTPException(409 if not engine.yuanta.logged_in else 502, str(e)) from e
+
+    @app.get("/api/trust/predict")
+    def trust_predict():
+        return engine.trust_predict()
 
     # ---------------------------------------------------------------- 觀察名單
     @app.get("/api/watch")

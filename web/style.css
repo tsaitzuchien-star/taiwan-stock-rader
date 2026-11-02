@@ -240,3 +240,9 @@ tr.why td { white-space: normal; background: var(--bar); padding: 10px 14px 12px
 .wbtn:hover { border-color: var(--accent); color: var(--accent); }
 .wbtn.on { border-color: var(--accent); color: var(--accent); cursor: default; }
 tr.tot td { font-weight: 700; border-top: 1px solid var(--line-strong); }
+
+/* 投信預測命中率 */
+.hitbars { display: flex; align-items: flex-end; gap: 3px; height: 140px; border-bottom: 1px solid var(--line-strong); }
+.hb { position: relative; flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; }
+.hb .bar { width: 100%; background: var(--accent); opacity: .85; border-radius: 2px 2px 0 0; }
+.hb .base { position: absolute; left: -1px; right: -1px; height: 2px; background: var(--muted); }
