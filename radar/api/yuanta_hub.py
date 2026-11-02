@@ -1,0 +1,118 @@
+"""戰情室裡唯一的元大連線（唯讀：庫存、即時報價、已實現損益；沒有任何下單功能）。
+
+- 整個程式只登入一次，網頁重新整理不會重覆登入（元大有每日登入次數限制）。
+- 庫存查詢結果快取 20 秒，報價靠訂閱推播即時更新，不會超過元大的呼叫頻率限制。
+"""
+from __future__ import annotations
+
+import threading
+import time
+from datetime import date, timedelta
+from typing import Callable
+
+import pandas as pd
+
+from ..config import Settings
+from ..yuanta.client import YuantaClient, YuantaConfig, YuantaError
+
+HOLDINGS_TTL = 20.0
+
+
+def mask(acct: str) -> str:
+    return acct[:5] + "*" * max(len(acct) - 5, 0) if acct else ""
+
+
+class YuantaHub:
+    def __init__(self, settings: Settings, factory: Callable[[YuantaConfig], YuantaClient] = YuantaClient):
+        self.config = YuantaConfig.from_dict(settings.yuanta or {})
+        self._factory = factory
+        self.client: YuantaClient | None = None
+        self.error: str | None = None
+        self.connecting = False
+        self.connected_at: str | None = None
+        self._lock = threading.Lock()
+        self._holdings: pd.DataFrame | None = None
+        self._holdings_at = 0.0
+        self.holdings_time: str | None = None
+
+    # ---------------------------------------------------------------- 狀態
+    @property
+    def configured(self) -> bool:
+        return bool(self.config.account)
+
+    @property
+    def logged_in(self) -> bool:
+        return bool(self.client and self.client.logged_in)
+
+    def status(self) -> dict:
+        c = self.client
+        return {
+            "configured": self.configured, "problems": self.config.problems() if self.configured else [],
+            "environment": self.config.environment.upper(), "account": mask(self.config.account),
+            "logged_in": self.logged_in, "connecting": self.connecting, "error": self.error,
+            "connected_at": self.connected_at,
+            "subscribed": len(c.subscribed) if c else 0,
+            "messages": list(c.messages)[-12:] if c else [],
+        }
+
+    # ---------------------------------------------------------------- 連線
+    def connect(self) -> dict:
+        if not self.configured:
+            raise YuantaError("還沒設定元大帳號：請在 config.local.toml 的 [yuanta] 填好帳號、電子密碼與元件資料夾")
+        with self._lock:
+            if self.logged_in:
+                return self.status()
+            self.connecting, self.error = True, None
+            try:
+                if self.client is None:
+                    self.client = self._factory(self.config)
+                self.client.connect()
+                self.connected_at = time.strftime("%H:%M:%S")
+            except Exception as e:  # noqa: BLE001
+                self.error = str(e)
+                raise YuantaError(self.error) from e
+            finally:
+                self.connecting = False
+        return self.status()
+
+    def disconnect(self) -> dict:
+        with self._lock:
+            if self.client is not None:
+                self.client.close()
+            self._holdings, self._holdings_at = None, 0.0
+            self.connected_at = None
+        return self.status()
+
+    def _client(self) -> YuantaClient:
+        if not self.logged_in:
+            raise YuantaError("尚未連線元大")
+        return self.client
+
+    # ---------------------------------------------------------------- 帳務
+    def holdings(self, force: bool = False) -> pd.DataFrame:
+        c = self._client()
+        with self._lock:
+            if force or self._holdings is None or time.monotonic() - self._holdings_at > HOLDINGS_TTL:
+                df = c.holdings()
+                self._holdings, self._holdings_at = df, time.monotonic()
+                self.holdings_time = time.strftime("%H:%M:%S")
+                pairs = [(code, m or "TWSE") for code, m in zip(df["股票代號"], df["市場"])
+                         if code not in c.subscribed]
+                if pairs:   # 新的持股：先拿一次快照，再訂閱即時推播
+                    try:
+                        c.snapshot(pairs)
+                        c.subscribe(pairs)
+                    except YuantaError as e:
+                        c.messages.append(f"庫存報價訂閱失敗：{e}")
+            return self._holdings
+
+    def quotes(self) -> dict[str, dict]:
+        c = self.client
+        if c is None:
+            return {}
+        with c._lock:
+            return {k: dict(v) for k, v in c.quotes.items()}
+
+    def realized(self, days: int) -> pd.DataFrame:
+        end = date.today()
+        return self._client().realized(end - timedelta(days=days), end)

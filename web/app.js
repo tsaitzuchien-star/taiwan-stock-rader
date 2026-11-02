@@ -63,11 +63,26 @@ function TopBar({ health, breadth }) {
         <span><span class="mut">站上季線</span> <b class="num">${fmt(breadth.above_ma60_pct, 1)}%</b></span>`}
     </div>
     <div class="right">
-      <span class="chip off" title="第二批會接上元大即時報價">元大 未連線</span>
+      <${YuantaChip} />
       <span class="chip num">${now.toLocaleTimeString('zh-TW', { hour12: false })}</span>
       ${db && html`<span class="mut">${db.stocks?.toLocaleString()} 檔 · ${db.trading_days} 日</span>`}
     </div>
   </header>`;
+}
+
+function YuantaChip() {
+  const [st, setSt] = useState(null);
+  useEffect(() => {
+    const load = () => api('/api/yuanta/status').then(setSt).catch(() => {});
+    load();
+    const t = setInterval(load, 10000);
+    addEventListener('yuanta', load);
+    return () => { clearInterval(t); removeEventListener('yuanta', load); };
+  }, []);
+  if (!st?.configured) return html`<span class="chip off" title="config.local.toml 尚未設定元大帳號">元大 未設定</span>`;
+  if (st.logged_in) return html`<a class="chip ok" href="#/positions" title=${`${st.environment} ${st.account} · ${st.connected_at} 登入`}>● 元大 已連線</a>`;
+  if (st.connecting) return html`<span class="chip">元大 連線中…</span>`;
+  return html`<a class="chip off" href="#/positions" title=${st.error || '到持倉風控連線'}>元大 未連線</a>`;
 }
 
 function SideNav({ page, health }) {
@@ -157,8 +172,8 @@ function Overview({ health, breadth }) {
         </div>
       </div>
       <div class="panel">
-        <div class="ph">即時警示<span class="sub">持倉＋自選</span></div>
-        <div class="empty">接上元大即時報價後，跌破季線、爆量等事件會在這裡即時跳出（第二批）。</div>
+        <div class="ph">持倉警示<span class="sub">元大即時 · <a href="#/positions">持倉風控</a></span></div>
+        <${PositionAlerts} />
       </div>
     </section>`;
 }
@@ -839,10 +854,159 @@ function Stock({ code, stocks, health }) {
 }
 
 // ---------------------------------------------------------------- 持倉（第二批）
+const LV = { danger: '危險', take: '獲利了結', warn: '注意', ok: '安全' };
+
+function useYuantaStatus(poll = 0) {
+  const [st, setSt] = useState(null);
+  const load = () => api('/api/yuanta/status').then(setSt).catch(() => {});
+  useEffect(() => {
+    load();
+    if (!poll) return undefined;
+    const t = setInterval(load, poll);
+    return () => clearInterval(t);
+  }, []);
+  return [st, load, setSt];
+}
+
+function usePositions(enabled, every = 5000) {
+  const [pos, setPos] = useState(null);
+  const [err, setErr] = useState('');
+  const load = (refresh) => api(`/api/positions${refresh ? '?refresh=true' : ''}`)
+    .then((r) => { setPos(r); setErr(''); }).catch((e) => setErr(e.message));
+  useEffect(() => {
+    if (!enabled) return undefined;
+    load();
+    const t = setInterval(() => { if (!document.hidden) load(); }, every);
+    return () => clearInterval(t);
+  }, [enabled]);
+  return [pos, err, load];
+}
+
+function AlertList({ alerts, limit }) {
+  if (!alerts?.length) return html`<div class="empty">目前沒有警示，持股都在防線內。</div>`;
+  return html`<div class="alerts">${alerts.slice(0, limit || 99).map((a) => html`
+    <a class=${`alert lv-${a.level}`} href=${`#/stock/${a.code}`}>
+      <b>${a.title}</b><span>${a.text}</span></a>`)}</div>`;
+}
+
+function PositionAlerts() {
+  const [st] = useYuantaStatus(15000);
+  const [pos] = usePositions(!!st?.logged_in, 15000);
+  if (!st) return html`<div class="empty">讀取中…</div>`;
+  if (!st.logged_in) {
+    return html`<div class="empty">${st.configured ? html`元大還沒連線。到 <a href="#/positions">持倉風控</a> 會自動連線，之後跌破季線、重挫、虧損擴大都會在這裡跳出。`
+      : '要先在 config.local.toml 設定元大帳號。'}</div>`;
+  }
+  if (!pos) return html`<div class="empty">讀取庫存中…</div>`;
+  const t = pos.totals;
+  return html`<div class="pb" style="display:flex;flex-direction:column;gap:10px">
+    <div class="kv"><span class="mut">持股 ${t.count} 檔 · 市值</span><span class="num">${won(t.value)}</span></div>
+    <div class="kv"><span class="mut">今日損益</span><span class=${`num ${cls(t.day_pnl)}`}>${signed(t.day_pnl, 0)}（${signed(t.day_pct, 2, '%')}）</span></div>
+    <div class="kv"><span class="mut">未實現損益</span><span class=${`num ${cls(t.pnl)}`}>${signed(t.pnl, 0)}（${signed(t.pnl_pct, 2, '%')}）</span></div>
+    <${AlertList} alerts=${pos.alerts} limit=${3} />
+  </div>`;
+}
+
+function YuantaPanel({ st, onConnect, onDisconnect, busy }) {
+  return html`<div class="panel"><div class="ph">元大帳務連線<span class="sub">唯讀：只查庫存、報價、損益，程式沒有任何下單功能</span></div>
+    <div class="pb ybar">
+      ${st?.logged_in ? html`<span class="chip ok">● 已連線</span>` : st?.connecting || busy ? html`<span class="chip">連線中…（約 5～10 秒）</span>`
+        : html`<span class="chip off">未連線</span>`}
+      <span class="mut">${st?.environment || ''} ${st?.account || ''}${st?.connected_at ? ` · ${st.connected_at} 登入` : ''}</span>
+      <span style="margin-left:auto;display:flex;gap:8px">
+        ${st?.logged_in ? html`<button class="btn ghost" onClick=${onDisconnect}>登出</button>`
+          : html`<button class="btn" disabled=${busy || !st?.configured} onClick=${onConnect}>連線元大</button>`}
+      </span>
+    </div>
+    ${st?.error && !st.logged_in && html`<div class="pb" style="padding-top:0"><div class="verdict danger"><h3>連線失敗</h3><pre class="errpre">${st.error}</pre></div></div>`}
+    ${st && !st.configured && html`<div class="empty">還沒設定元大帳號：請在 config.local.toml 的 [yuanta] 填好帳號、電子密碼與元件資料夾（和「測試元大連線.bat」用的是同一份設定）。</div>`}
+  </div>`;
+}
+
 function Positions() {
-  return html`<div class="panel"><div class="ph">持倉風控<span class="sub">元大帳務</span></div>
-    <div class="empty">這頁會接上元大：庫存、即時損益、季線防線、與已實現損益。<br />
-    元大正式環境測試通過後就會推出。現在可以先到 <a href="#/stock">個股分析</a> 用「持倉防禦約談」手動試算。</div></div>`;
+  const [st, loadSt, setSt] = useYuantaStatus();
+  const [busy, setBusy] = useState(false);
+  const tried = useRef(false);
+  const connect = async () => {
+    setBusy(true);
+    try { setSt(await post('/api/yuanta/connect')); } catch (e) { await loadSt(); }
+    setBusy(false);
+    dispatchEvent(new Event('yuanta'));
+  };
+  const disconnect = async () => { setSt(await post('/api/yuanta/disconnect')); dispatchEvent(new Event('yuanta')); };
+  useEffect(() => {   // 打開這頁就自動連線一次（失敗就不再自動重試，避免用掉登入次數）
+    if (st && st.configured && !st.logged_in && !st.connecting && !st.error && !tried.current) {
+      tried.current = true; connect();
+    }
+  }, [st]);
+  const [pos, err, loadPos] = usePositions(!!st?.logged_in);
+  const [days, setDays] = useState(30);
+  const [rz, setRz] = useState(null);
+  useEffect(() => {
+    if (!st?.logged_in) return;
+    setRz(null);
+    api(`/api/positions/realized?days=${days}`).then(setRz).catch((e) => setRz({ error: e.message }));
+  }, [st?.logged_in, days]);
+  const t = pos?.totals;
+  const go = (code) => { location.hash = `#/stock/${code}`; };
+  return html`
+    <${YuantaPanel} st=${st} busy=${busy} onConnect=${connect} onDisconnect=${disconnect} />
+    ${st?.logged_in && html`
+    ${err && html`<div class="toast">${err}</div>`}
+    <section class="grid g-kpi">
+      <div class="panel pb kpi"><div class="label">股票市值</div><div class="value">${t ? won(t.value) : '—'}</div>
+        <div class="subv mut">${t ? `${t.count} 檔 · 成本 ${won(t.cost)}` : '讀取中…'}</div></div>
+      <div class="panel pb kpi"><div class="label">今日損益</div><div class=${`value ${cls(t?.day_pnl)}`}>${t ? signed(t.day_pnl, 0) : '—'}</div>
+        <div class=${`subv ${cls(t?.day_pct)}`}>${t ? signed(t.day_pct, 2, '%') : ''}</div></div>
+      <div class="panel pb kpi"><div class="label">未實現損益</div><div class=${`value ${cls(t?.pnl)}`}>${t ? signed(t.pnl, 0) : '—'}</div>
+        <div class=${`subv ${cls(t?.pnl_pct)}`}>${t ? signed(t.pnl_pct, 2, '%') : ''}</div></div>
+      <div class="panel pb kpi"><div class="label">警示</div><div class=${`value ${pos?.alerts?.length ? 'acc' : ''}`}>${pos ? pos.alerts.length : '—'} <span class="mut" style="font-size:16px">則</span></div>
+        <div class="subv mut">${pos ? `報價 ${pos.now} · 庫存 ${pos.holdings_time}` : ''}</div></div>
+    </section>
+    <section class="grid g-2">
+      <div class="panel" style="grid-column:1/-1">
+        <div class="ph">我的庫存<span class="sub">即時價每 5 秒更新 · 損益已估算賣出手續費與證交稅 ·
+          <button class="linkbtn" onClick=${() => loadPos(true)}>重新查詢庫存</button></span></div>
+        ${!pos ? html`<div class="empty">讀取庫存中…</div>` : !pos.rows.length ? html`<div class="empty">目前沒有股票庫存。</div>` : html`
+        <div class="tablewrap"><table>
+          <thead><tr><th class="l">股票</th><th>股數</th><th>均價</th><th>現價</th><th>今日</th><th>市值</th><th>未實現損益</th>
+            <th>季線</th><th>距季線</th><th class="l">防禦裁決</th></tr></thead>
+          <tbody>${pos.rows.map((r) => html`<tr onClick=${() => go(r.code)}>
+            <td class="l"><span class="num acc">${r.code}</span> ${r.name}${r.kind !== '現股' ? html` <span class="tag">${r.kind}</span>` : ''}</td>
+            <td class="num">${r.shares.toLocaleString()}</td>
+            <td class="num">${fmt(r.avg, 2)}</td>
+            <td class="num">${fmt(r.price, 2)}${r.live ? html`<i class="live" title="元大即時報價"></i>` : ''}</td>
+            <td class=${`num ${cls(r.day_chg_pct)}`}>${signed(r.day_chg_pct, 2, '%')}<br /><small>${signed(r.day_pnl, 0)}</small></td>
+            <td class="num">${won(r.value)}</td>
+            <td class=${`num ${cls(r.pnl)}`}>${signed(r.pnl, 0)}<br /><small>${signed(r.pnl_pct, 2, '%')}</small></td>
+            <td class="num mut">${fmt(r.ma60, 2)}</td>
+            <td class=${`num ${cls(r.dist_ma60)}`}>${signed(r.dist_ma60, 1, '%')}</td>
+            <td class="l">${r.verdict ? html`<span class=${`tag lvtag lv-${r.verdict.level}`}>${LV[r.verdict.level]}</span> ${r.verdict.title}` : html`<span class="mut">資料不足</span>`}</td>
+          </tr>`)}</tbody>
+        </table></div>`}
+      </div>
+    </section>
+    <section class="grid g-2">
+      <div class="panel">
+        <div class="ph">即時警示<span class="sub">跌破季線、逼近季線、今日重挫、虧損超過 8%、過熱</span></div>
+        ${pos ? html`<div class="pb"><${AlertList} alerts=${pos.alerts} /></div>` : html`<div class="empty">讀取中…</div>`}
+      </div>
+      <div class="panel">
+        <div class="ph">已實現損益<span class="sub"><span class="seg">${[7, 30, 90, 365].map((d) => html`
+          <button class=${days === d ? 'on' : ''} onClick=${() => setDays(d)}>${d === 365 ? '1 年' : `${d} 天`}</button>`)}</span></span></div>
+        ${!rz ? html`<div class="empty">查詢中…</div>` : rz.error ? html`<div class="empty">${rz.error}</div>` : !rz.count ? html`<div class="empty">這段期間沒有已實現損益。</div>` : html`
+          <div class="pb" style="padding-bottom:0"><div class="kv"><span class="mut">合計（${rz.count} 筆，賺錢 ${rz.wins} 筆）</span>
+            <span class=${`num ${cls(rz.total)}`} style="font-size:18px">${signed(rz.total, 0)}</span></div></div>
+          <div class="tablewrap"><table>
+            <thead><tr><th class="l">日期</th><th class="l">股票</th><th>股數</th><th>成交價</th><th>損益</th></tr></thead>
+            <tbody>${rz.rows.map((r) => html`<tr onClick=${() => go(r.code)}>
+              <td class="l num mut">${r.date}</td><td class="l num acc">${r.code}</td><td class="num">${(r.shares || 0).toLocaleString()}</td>
+              <td class="num">${fmt(r.price, 2)}</td><td class=${`num ${cls(r.pnl)}`}>${signed(r.pnl, 0)}</td></tr>`)}</tbody>
+          </table></div>`}
+      </div>
+    </section>`}
+    ${st?.messages?.length ? html`<details class="panel msgs"><summary class="ph">元大連線訊息<span class="sub">診斷用</span></summary>
+      <pre class="errpre pb">${st.messages.join('\n')}</pre></details>` : ''}`;
 }
 
 // ---------------------------------------------------------------- 資料與設定

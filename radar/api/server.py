@@ -19,11 +19,14 @@ from pydantic import BaseModel
 from .. import alpha as radar_alpha
 from .. import arena as radar_arena
 from .. import collect as radar_collect
+from .. import positions as radar_positions
 from ..config import ROOT, Settings, load_settings
 from ..defense import evaluate as defense_evaluate
 from ..indicators import compute_metrics, to_ohlcv
 from ..storage import Store
 from ..tactics import TACTIC_BY_ID, TACTICS, ScanParams, apply_filters
+from ..yuanta.client import YuantaError
+from .yuanta_hub import YuantaHub
 
 WEB_DIR = ROOT / "web"
 SPARK_DAYS = 20
@@ -48,6 +51,7 @@ class Engine:
         self._alpha: dict | None = None
         self.update_job: dict = {"running": False}
         self.arena_job: dict = {"running": False}
+        self.yuanta = YuantaHub(settings)
         self._arena_lock = threading.Lock()
 
     def health(self) -> dict:
@@ -198,6 +202,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="台股雷達戰情室", docs_url="/api/docs", redoc_url=None)
     app.state.engine = engine
 
+    @app.on_event("shutdown")
+    def _logout_yuanta():
+        try:
+            engine.yuanta.disconnect()
+        except Exception:  # noqa: BLE001
+            pass
+
     @app.get("/api/health")
     def health():
         return {"time": datetime.now().isoformat(timespec="seconds"), "db": engine.health(),
@@ -339,6 +350,48 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "revenue": df_records(rev),
             "coverage": a["coverage"],
         }
+
+    # ------------------------------------------------------------ 元大（唯讀）與持倉風控
+    @app.get("/api/yuanta/status")
+    def yuanta_status():
+        return engine.yuanta.status()
+
+    @app.post("/api/yuanta/connect")
+    def yuanta_connect():
+        try:
+            return engine.yuanta.connect()
+        except YuantaError as e:
+            raise HTTPException(502, str(e)) from e
+
+    @app.post("/api/yuanta/disconnect")
+    def yuanta_disconnect():
+        return engine.yuanta.disconnect()
+
+    @app.get("/api/positions")
+    def positions(refresh: bool = False):
+        hub = engine.yuanta
+        try:
+            h = hub.holdings(force=refresh)
+        except YuantaError as e:
+            raise HTTPException(409 if not hub.logged_in else 502, str(e)) from e
+        bars = engine.metrics()["bars"]
+        codes = set(h["股票代號"])
+        closes = {}
+        if not bars.empty and codes:
+            sub = bars[bars["code"].isin(codes)]
+            for code, g in sub.groupby("code"):
+                closes[code] = pd.Series(g["close"].values, index=g["date"].dt.strftime("%Y-%m-%d"))
+        out = radar_positions.build(h, hub.quotes(), closes, datetime.now().strftime("%Y-%m-%d"))
+        out["holdings_time"] = hub.holdings_time
+        out["now"] = datetime.now().strftime("%H:%M:%S")
+        return radar_arena._clean(out)
+
+    @app.get("/api/positions/realized")
+    def positions_realized(days: int = 30):
+        try:
+            return radar_arena._clean(radar_positions.realized_summary(engine.yuanta.realized(min(max(days, 1), 365))))
+        except YuantaError as e:
+            raise HTTPException(409 if not engine.yuanta.logged_in else 502, str(e)) from e
 
     @app.get("/api/arena")
     def arena():
