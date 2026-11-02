@@ -37,6 +37,8 @@ SNAPSHOT_BATCH = 500
 MAX_SUBSCRIPTIONS = 1900
 LOGIN_RETRY_GAP = 5.0
 CONNECT_TIMEOUT = 20
+CONNECT_SETTLE = 3.0       # 秒；收到第一個「已連線」後，等其他服務通道（登入、交易）也建好
+LOGIN_TRIES = 3            # 元件直接回傳 False（還沒送到主機）時最多重試幾次
 DEFAULT_LOG_DIR = Path(__file__).resolve().parents[2] / "logs" / "yuanta"
 SUSPEND_SECONDS = 65
 # 元大元件資料夾裡一定要有的檔案（YuantaSparkAPI.dll 依賴其他 dll，不能單獨複製）
@@ -394,16 +396,35 @@ class YuantaClient:
             gap = time.monotonic() - self._last_login_fail
             if gap < LOGIN_RETRY_GAP:
                 time.sleep(LOGIN_RETRY_GAP - gap)
+            # 「已連線」只代表台股報價通道好了；登入、交易通道會晚幾百毫秒才建好，
+            # 太早呼叫 Login 元件會直接回傳 False（主機紀錄裡完全沒有登入動作）。
+            time.sleep(CONNECT_SETTLE)
             c = self.config
             if c.cert_path:
                 invoke = lambda: self._api.Login(c.cert_path, c.cert_password, c.account, c.password)  # noqa: E731
             else:
                 invoke = lambda: self._api.Login(c.account, c.password)  # noqa: E731
-            try:
-                result = self._request("Login", invoke, interval=0, need_login=False)
-            except YuantaError:
-                self._last_login_fail = time.monotonic()
-                raise
+            result = None
+            for attempt in range(1, LOGIN_TRIES + 1):
+                try:
+                    result = self._request("Login", invoke, interval=0, need_login=False)
+                    break
+                except YuantaError as e:
+                    rejected = "回傳 False" in str(e)
+                    if rejected and attempt < LOGIN_TRIES:
+                        self._note(f"Login 元件回傳 False，{CONNECT_SETTLE:.0f} 秒後重試（第 {attempt} 次）")
+                        time.sleep(CONNECT_SETTLE)
+                        continue
+                    self._last_login_fail = time.monotonic()
+                    if rejected:
+                        raise YuantaError(
+                            f"Login 送出失敗（元件連續 {LOGIN_TRIES} 次回傳 False，登入還沒送到元大主機）。\n"
+                            "最常見原因：這台電腦的 Windows 還沒有匯入元大的「API 憑證」。\n"
+                            "  做法：在元大元件資料夾雙擊憑證檔（.pfx）→ 存放位置選「目前使用者」→ 輸入憑證密碼 → 一路下一步完成，\n"
+                            "        或在 config.local.toml 的 [yuanta] 填 cert_path（.pfx 完整路徑）與 cert_password。\n"
+                            "其他原因：帳號格式要是 S + 4 碼分公司 + 7 碼帳號（共 12 碼，不要有 - 或空白）。\n"
+                            f"元大元件的紀錄檔在：{self.log_dir}") from e
+                    raise
             info = parsers.parse_login(result)
             if not info["ok"]:
                 self._last_login_fail = time.monotonic()

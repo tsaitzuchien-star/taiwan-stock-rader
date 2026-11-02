@@ -244,3 +244,30 @@ def test_no_connection_means_no_login(monkeypatch, tmp_path):
         c.connect()
     assert not any(x[0] == "Login" for x in t.calls)
     assert c.events_seen == 0 and not c.logged_in
+
+
+def test_login_retries_when_component_returns_false(monkeypatch):
+    monkeypatch.setattr("radar.yuanta.client.time.sleep", lambda s: None)
+    t = FakeTrader()
+    real = t.Login
+    answers = [False, True]
+
+    def flaky(acct, pwd):
+        if answers.pop(0) is False:
+            t.calls.append(("LoginRejected", acct))
+            return False
+        return real(acct, pwd)
+    t.Login = flaky
+    c, _ = make_client(trader=t)
+    assert c.connect()["ok"] and c.logged_in
+    assert [x[0] for x in t.calls if x[0].startswith("Login")] == ["LoginRejected", "Login"]
+
+
+def test_login_false_every_time_explains_certificate(monkeypatch):
+    monkeypatch.setattr("radar.yuanta.client.time.sleep", lambda s: None)
+    t = FakeTrader()
+    t.Login = lambda acct, pwd: (t.calls.append(("Login", acct)), False)[1]
+    c, _ = make_client(trader=t)
+    with pytest.raises(YuantaError, match="憑證"):
+        c.connect()
+    assert len([x for x in t.calls if x[0] == "Login"]) == 3 and not c.logged_in
