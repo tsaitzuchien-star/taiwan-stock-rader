@@ -442,6 +442,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         price = q.get("price") or (pts[-1]["close"] if pts else None)
         return radar_arena._clean({
             "available": True, "date": today, "time": r["time"], "source": r["source"], "points": pts,
+            "diag": r.get("diag"),
             "prev_close": prev, "price": price, "open": q.get("open"), "high": q.get("high"), "low": q.get("low"),
             "total_vol": q.get("total_vol"), "limit_up": q.get("limit_up"), "limit_down": q.get("limit_down"),
             "chg": (price - prev) if price and prev else None,

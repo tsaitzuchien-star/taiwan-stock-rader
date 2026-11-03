@@ -239,6 +239,7 @@ class YuantaClient:
         self.minutes: dict[str, dict[str, list]] = {}   # 今天每分鐘的 [開, 高, 低, 收, 累計量]（自己從報價累積）
         self._minutes_day = ""
         self._kline_minute_type = None                  # 1 分 K 的列舉值（第一次用到時從元件裡找）
+        self.kline_type_names: list[str] = []
         self.subscribed: set[str] = set()
         self.messages: deque[str] = deque(maxlen=200)
         self.reports: deque[str] = deque(maxlen=200)
@@ -600,7 +601,17 @@ class YuantaClient:
             return self._kline_minute_type or None
         import re
         typ = self._sdk.KLineType
-        names = [n for n in dir(typ) if not n.startswith("_") and n[:1].isalpha()]
+        names = []
+        try:   # .NET 列舉：用 System.Enum 取得正式的成員名稱
+            import clr  # type: ignore
+            import System  # type: ignore
+            names = [str(n) for n in System.Enum.GetNames(clr.GetClrType(typ))]
+        except Exception:  # noqa: BLE001
+            pass
+        if not names:
+            names = [n for n in dir(typ) if not n.startswith("_") and n[:1].isalpha()
+                     and not callable(getattr(typ, n, None))]
+        self.kline_type_names = names
         pick = None
         for n in names:
             if re.search(r"min|分", n, re.I) and re.search(r"(?<!\d)1(?!\d)|one", n, re.I):

@@ -907,7 +907,8 @@ function Intraday({ code }) {
       ${d.high != null && html`<span class="mut">高 <span class="num up">${fmt(d.high)}</span> 低 <span class="num dn">${fmt(d.low)}</span></span>`}
       ${d.total_vol != null && html`<span class="mut">量 <span class="num">${fmt(d.total_vol, 0)}</span> 張</span>`}</div>
     <${IntradayChart} d=${d} />
-    <div class="mut small" style="padding:0 8px">${d.closed ? '今日已收盤' : '盤中每 20 秒更新'} · ${d.time} · 資料來源：元大${d.source ? ` ${d.source}` : ''}</div>`;
+    <div class="mut small" style="padding:0 8px">${d.closed ? '今日已收盤' : '盤中每 20 秒更新'} · ${d.time} · 資料來源：元大${d.source ? ` ${d.source}` : ''}</div>
+    ${d.diag && html`<div class="mut small" style="padding:4px 8px 0">1 分 K 沒接上：${d.diag.error || '原因不明'}${d.diag.types?.length ? `（元件的 K 線類型：${d.diag.types.join('、')}）` : ''}</div>`}`;
 }
 
 function StockSearch({ stocks, current }) {

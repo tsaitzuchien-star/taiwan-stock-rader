@@ -44,6 +44,7 @@ class YuantaHub:
         self._market_busy = threading.Lock()
         self.ever_logged_in = False
         self._intraday: dict[str, tuple[float, list]] = {}
+        self.kline_error: str | None = None
         self._auto_day: str | None = None
         self._auto_count = 0
         self._auto_last = -1e9
@@ -192,13 +193,17 @@ class YuantaHub:
         now = time.monotonic()
         hit = self._intraday.get(code)
         kbars, source = (hit[1] if hit else []), "1 分 K"
-        if hit is None or now - hit[0] > INTRADAY_TTL:
+        ttl = INTRADAY_TTL if not self.kline_error else 300.0   # 失敗過就 5 分鐘才再試一次
+        if hit is None or now - hit[0] > ttl:
             try:
                 df = c.intraday_kline(code, market, date.today())
                 kbars = [(r.time, r.open, r.high, r.low, r.close, r.volume) for r in df.itertuples()]
+                self.kline_error = None if kbars else "元大 1 分 K 回傳 0 筆"
             except YuantaError as e:
                 kbars = []
-                c.messages.append(f"{code} 1 分 K 查詢失敗，改用即時報價累積：{e}")
+                if str(e) != self.kline_error:
+                    c.messages.append(f"{code} 1 分 K 查詢失敗，改用即時報價累積：{e}")
+                self.kline_error = str(e)
             self._intraday[code] = (now, kbars)
         mine = c.minute_bars(code)
         last_k = kbars[-1][0] if kbars else ""
@@ -207,7 +212,8 @@ class YuantaHub:
             source = "即時報價累積（打開戰情室之後才有）" if bars else ""
         with c._lock:
             q = dict(c.quotes.get(code) or {})
-        return {"bars": bars, "quote": q, "source": source, "time": datetime.now().strftime("%H:%M:%S")}
+        diag = None if kbars else {"error": self.kline_error, "types": c.kline_type_names[:30]}
+        return {"bars": bars, "quote": q, "source": source, "time": datetime.now().strftime("%H:%M:%S"), "diag": diag}
 
     def realized(self, days: int) -> pd.DataFrame:
         end = date.today()
