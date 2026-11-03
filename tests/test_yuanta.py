@@ -437,3 +437,19 @@ def test_intraday_kline_all_rejected_reports_daily_probe():
     with pytest.raises(YuantaError) as e:
         c.intraday_kline("3374", "TPEX", date(2026, 11, 3))
     assert "試過的日期寫法" in str(e.value) and "日線查詢：也失敗" in str(e.value)
+
+
+def test_config_requires_pfx_outside_windows(monkeypatch, tmp_path):
+    monkeypatch.setattr("radar.yuanta.client.sys.platform", "linux")
+    cfg = YuantaConfig(account="S981D0816864", password="x", sdk_dir=str(tmp_path))
+    assert any("cert_path" in m for m in cfg.problems())
+    cfg = YuantaConfig(account="S981D0816864", password="x", sdk_dir=str(tmp_path),
+                       cert_path=str(tmp_path / "nope.pfx"))
+    assert any("找不到憑證檔" in m for m in cfg.problems())
+    pfx = tmp_path / "me.pfx"
+    pfx.write_bytes(b"x")
+    cfg = YuantaConfig(account="S981D0816864", password="x", sdk_dir=str(tmp_path), cert_path=str(pfx))
+    assert not any("cert_path" in m or "憑證" in m for m in cfg.problems())
+    monkeypatch.setattr("radar.yuanta.client.sys.platform", "win32")
+    cfg = YuantaConfig(account="S981D0816864", password="x", sdk_dir=str(tmp_path))
+    assert not any("cert_path" in m for m in cfg.problems())

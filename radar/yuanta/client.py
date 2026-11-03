@@ -102,6 +102,13 @@ class YuantaConfig:
             out.append(f"{self.sdk_dir} 不是完整的元大元件資料夾，缺少 "
                        f"{'、'.join(missing_sdk_files(self.sdk_dir))}"
                        "（請指到放元大範例程式 YSendOrder.py 的資料夾）")
+        if sys.platform != "win32":
+            # 元大說明：Linux / macOS 沒有 Windows 憑證存放區，一定要用 pfx 檔登入
+            if not self.cert_path:
+                out.append("Linux / macOS（例如樹莓派）一定要在 [yuanta] 填 cert_path（你的元大憑證 .pfx 完整路徑）"
+                           "與 cert_password")
+            elif not Path(self.cert_path).is_file():
+                out.append(f"找不到憑證檔 {self.cert_path}（cert_path 要填 .pfx 的完整路徑）")
         return out
 
 
@@ -115,6 +122,8 @@ def load_sdk(sdk_dir: str | Path) -> SimpleNamespace:
                           "請把 sdk_dir 指到放元大範例程式 YSendOrder.py 的那個資料夾")
     if sys.platform == "win32":
         os.add_dll_directory(str(sdk_dir))
+    else:
+        _preload_native_libs(sdk_dir)
     if str(sdk_dir) not in sys.path:
         sys.path.append(str(sdk_dir))
 
@@ -137,9 +146,11 @@ def load_sdk(sdk_dir: str | Path) -> SimpleNamespace:
                 pythonnet.load()
             except Exception as e2:  # noqa: BLE001
                 errors.append(f"元大內附 .NET：{e2}")
+                hint = ("安裝「.NET Runtime 8」（Windows x64），裝好後重新開機再試。" if sys.platform == "win32" else
+                        "安裝 .NET 8（樹莓派請執行 scripts/pi/install.sh，或手動裝好後設定 DOTNET_ROOT 環境變數）。")
                 raise YuantaError(
                     "無法啟動 .NET 8。請到 https://dotnet.microsoft.com/download/dotnet/8.0 "
-                    "安裝「.NET Runtime 8」（Windows x64），裝好後重新開機再試。\n" + "\n".join(errors))
+                    + hint + "\n" + "\n".join(errors))
 
     import clr  # type: ignore
     clr.AddReference("System.Collections")
@@ -168,6 +179,18 @@ def load_sdk(sdk_dir: str | Path) -> SimpleNamespace:
         Quote=Quote,
         KLineType=KLineType,
     )
+
+
+def _preload_native_libs(sdk_dir: Path) -> None:
+    """Linux / macOS：先把元大資料夾裡的 .so / .dylib 載入，.NET 呼叫加簽元件時才找得到。
+    （Windows 靠 os.add_dll_directory；Linux 沒有對應做法，服務設定檔另外也會設 LD_LIBRARY_PATH。）"""
+    import ctypes
+    for pattern in ("*.so", "*.so.*", "*.dylib"):
+        for lib in sorted(sdk_dir.glob(pattern)):
+            try:
+                ctypes.CDLL(str(lib), mode=ctypes.RTLD_GLOBAL)
+            except OSError as e:
+                log.warning("載入 %s 失敗（可能是下載到別的平台版本，例如 x64 而不是 arm64）：%s", lib.name, e)
 
 
 def missing_sdk_files(sdk_dir: str | Path) -> list[str]:
@@ -458,8 +481,10 @@ class YuantaClient:
                         self._last_login_fail = time.monotonic()
                         raise YuantaError(
                             f"這台電腦的元大憑證有問題（{self.cert_error}），已停止重試以免被元大暫停。\n"
-                            "做法：在元大元件資料夾雙擊憑證檔（.pfx）→ 存放位置選「目前使用者」→ 輸入憑證密碼 → 一路下一步完成，\n"
-                            "      完成後關掉戰情室再重新開啟。") from e
+                            + ("做法：在元大元件資料夾雙擊憑證檔（.pfx）→ 存放位置選「目前使用者」→ 輸入憑證密碼 → 一路下一步完成，\n"
+                               "      完成後關掉戰情室再重新開啟。" if sys.platform == "win32" else
+                               "做法：確認 config.local.toml 的 cert_path 指到你本人的元大憑證 .pfx、cert_password 是匯出時設的密碼，\n"
+                               "      改好後執行 sudo systemctl restart taiwan-radar。")) from e
                     if rejected and attempt < LOGIN_TRIES:
                         self._note(f"Login 元件回傳 False，已等 {CONNECT_SETTLE:.0f} 秒，重試（第 {attempt} 次）")
                         continue
