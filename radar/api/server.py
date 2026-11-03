@@ -540,7 +540,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def watch_list():
         cache = engine.metrics()
         with engine.lock:
-            return radar_watch.Watch(engine.store).report(cache["bars"])
+            rep = radar_watch.Watch(engine.store).report(cache["bars"])
+        rep["live"] = None
+        hub, now = engine.yuanta, datetime.now()
+        today = now.strftime("%Y-%m-%d")
+        if (rep["rows"] and hub.logged_in and now.weekday() < 5 and str(cache["latest"])[:10] < today
+                and now.strftime("%H:%M") >= "09:00"):
+            # 盤中：至今報酬改用元大即時報價（全市場快照每分鐘更新，持股另有即時推播）
+            markets = cache["markets"]
+            hub.refresh_market([(c, markets.get(c) or "TWSE") for c in cache["df"]["股票代號"]])
+            n = radar_watch.apply_live(rep["rows"], hub.quotes(), today)
+            if n:
+                rep["live"] = {"time": hub.market_time, "count": n,
+                               "closed": now.strftime("%H:%M") >= "13:31"}
+        return rep
 
     @app.post("/api/watch")
     def watch_add(req: WatchRequest):

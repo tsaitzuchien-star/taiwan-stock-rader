@@ -72,3 +72,16 @@ def test_watch_api(tmp_path):
     assert [x["code"] for x in rows] == ["2330"] and rows[0]["days"] == 0
     assert c.delete(f"/api/watch/{a['id']}").json()["ok"]
     assert c.delete(f"/api/watch/{a['id']}").status_code == 404
+
+
+def test_apply_live_quotes():
+    from radar.watch import apply_live
+    rows = [{"code": "2330", "added_date": "2026-11-02", "price": 100.0, "ret": 0.0, "max_up": None,
+             "max_dn": None, "bench_base": 50.0, "days": 0},
+            {"code": "2454", "added_date": "2026-11-03", "price": 10.0, "ret": 0.0, "days": 0}]
+    q = {"2330": {"price": 105.0, "high": 107.0, "low": 98.0}, "2454": {"price": 11.0}, "0050": {"price": 51.0}}
+    assert apply_live(rows, q, "2026-11-03") == 1        # 今天才加入的不用即時價
+    r = rows[0]
+    assert r["live"] and r["last"] == 105.0 and r["ret"] == 5.0
+    assert r["max_up"] == 7.0 and r["max_dn"] == -2.0 and r["bench_ret"] == 2.0
+    assert "live" not in rows[1]

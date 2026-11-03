@@ -1105,6 +1105,11 @@ function WatchPage({ health }) {
   const [err, setErr] = useState('');
   const load = () => api('/api/watch').then(setRep).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, [health?.db?.latest_date]);
+  useEffect(() => {   // 盤中每分鐘更新一次（元大即時報價）
+    if (!rep?.live || rep.live.closed) return undefined;
+    const t = setInterval(load, 60000);
+    return () => clearInterval(t);
+  }, [rep?.live?.closed, !!rep?.live]);
   const del = (w) => { if (confirm(`把 ${w.code} ${w.name}（${w.added_date} 加入）從觀察名單移除？`)) api(`/api/watch/${w.id}`, { method: 'DELETE' }).then(load); };
   const pct = (v, bench) => (v == null ? html`<span class="mut">—</span>` : html`<span class=${`num ${cls(v)}`}>${signed(v, 1, '%')}</span>
     ${bench != null && html`<div class="eparts num">0050 ${signed(bench, 1, '%')}</div>`}`);
@@ -1112,7 +1117,7 @@ function WatchPage({ health }) {
   if (!rep) return html`<div class="panel"><div class="empty">讀取中…</div></div>`;
   return html`
     <section class="panel">
-      <div class="ph">觀察名單<span class="sub">以加入當天收盤價為基準 · 3 天／1 週／2 週 = 之後第 3／5／10 個交易日收盤</span></div>
+      <div class="ph">觀察名單${rep.live ? html` <span class="tag hot">${rep.live.closed ? '今日收盤' : '盤中即時'} ${rep.live.time || ''}</span>` : ''}<span class="sub">以加入當天收盤價為基準 · 3 天／1 週／2 週 = 之後第 3／5／10 個交易日收盤</span></div>
       ${!rep.rows.length ? html`<div class="empty">還沒有觀察的股票。到 <a href="#/radar">雷達掃描</a> 或個股分析按「＋ 觀察」，就會記下當天的價格和進場分數。</div>` : html`
       <div class="tablewrap"><table>
         <thead><tr><th class="l">代號</th><th class="l">名稱</th><th class="l">來源</th><th class="l">加入日</th><th>加入價</th><th>進場分數</th>
@@ -1122,10 +1127,10 @@ function WatchPage({ health }) {
           <td class="l num">${w.added_date}</td><td class="num">${fmt(w.price)}</td>
           <td><${EntryScore} r=${{ ...w, entry_parts: w.parts }} /></td>
           ${HZ.map(([k]) => html`<td>${pct(w[k], w[`${k}_bench`])}</td>`)}
-          <td>${pct(w.ret, w.bench_ret)}<div class="eparts num">${w.last != null ? `現價 ${fmt(w.last)}` : ''}</div></td>
+          <td>${pct(w.ret, w.bench_ret)}<div class="eparts num">${w.last != null ? `${w.live ? '即時' : '現價'} ${fmt(w.last)}` : ''}</div></td>
           <td class=${`num ${cls(w.max_up)}`}>${w.max_up == null ? '—' : signed(w.max_up, 1, '%')}</td>
           <td class=${`num ${cls(w.max_dn)}`}>${w.max_dn == null ? '—' : signed(w.max_dn, 1, '%')}</td>
-          <td class="l mut" style="white-space:nowrap">${w.days >= 10 ? '已滿 2 週' : `第 ${w.days} 個交易日`}</td>
+          <td class="l mut" style="white-space:nowrap">${w.days >= 10 ? '已滿 2 週' : w.live ? `第 ${w.days + 1} 個交易日（盤中）` : `第 ${w.days} 個交易日`}</td>
           <td><button type="button" class="wbtn" onClick=${(e) => { e.stopPropagation(); del(w); }}>移除</button></td>
         </tr>`)}</tbody></table></div>`}
     </section>
