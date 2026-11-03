@@ -31,6 +31,27 @@ def _r(v, d=2):
     return None if v is None or (isinstance(v, float) and math.isnan(v)) else round(float(v), d)
 
 
+def apply_live(rows: list[dict], quotes: dict[str, dict], today: str, bench: str = BENCH) -> int:
+    """盤中：用元大即時報價更新「至今」「期間最高／最低」與同期 0050。回傳更新了幾檔。"""
+    b = (quotes.get(bench) or {}).get("price")
+    n = 0
+    for r in rows:
+        q = quotes.get(r["code"]) or {}
+        px = q.get("price")
+        if not px or r["added_date"] >= today:
+            continue
+        base = float(r["price"])
+        r.update({"last": px, "last_date": today, "live": True, "ret": _r((px / base - 1) * 100)})
+        hi, lo = q.get("high") or px, q.get("low") or px
+        up, dn = _r((hi / base - 1) * 100), _r((lo / base - 1) * 100)
+        r["max_up"] = up if r.get("max_up") is None else max(r["max_up"], up)
+        r["max_dn"] = dn if r.get("max_dn") is None else min(r["max_dn"], dn)
+        if b and r.get("bench_base"):
+            r["bench_ret"] = _r((b / r["bench_base"] - 1) * 100)
+        n += 1
+    return n
+
+
 class Watch:
     def __init__(self, store):
         self.conn = store._conn
@@ -96,6 +117,7 @@ class Watch:
                 out[key] = _r((float(after["close"].iloc[n - 1]) / price - 1) * 100)
                 if b0 and len(bafter) >= n:
                     out[f"{key}_bench"] = _r((float(bafter["close"].iloc[n - 1]) / b0 - 1) * 100)
+        out["bench_base"] = b0
         if b0 and bench is not None:
             out["bench_ret"] = _r((float(bench["close"].iloc[-1]) / b0 - 1) * 100)
         return out
