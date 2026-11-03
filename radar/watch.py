@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS watchlist (
 """
 HORIZONS = (("d3", 3, "3 天"), ("d5", 5, "1 週"), ("d10", 10, "2 週"))
 BENCH = "0050"
+PATH_DAYS = 10   # 「每日進度」顯示最近幾個交易日
 BUCKETS = (("70 分以上", 70, 101), ("50～69 分", 50, 70), ("未滿 50 分", -1, 50))
 
 
@@ -41,7 +42,11 @@ def apply_live(rows: list[dict], quotes: dict[str, dict], today: str, bench: str
         if not px or r["added_date"] >= today:
             continue
         base = float(r["price"])
+        prev_last = r.get("last")
         r.update({"last": px, "last_date": today, "live": True, "ret": _r((px / base - 1) * 100)})
+        ref = q.get("prev_close") or prev_last
+        r["day_chg"] = _r((px / ref - 1) * 100) if ref else None
+        r["path"] = (r.get("path") or [])[-(PATH_DAYS - 1):] + [{"d": today, "ret": r["ret"], "live": True}]
         hi, lo = q.get("high") or px, q.get("low") or px
         up, dn = _r((hi / base - 1) * 100), _r((lo / base - 1) * 100)
         r["max_up"] = up if r.get("max_up") is None else max(r["max_up"], up)
@@ -104,6 +109,10 @@ class Watch:
         last = float(g["close"].iloc[-1])
         out.update({"days": len(after), "last": last, "last_date": g["d"].iloc[-1],
                     "ret": _r((last / price - 1) * 100)})
+        prev = float(g["close"].iloc[-2]) if len(g) >= 2 else None
+        out["day_chg"] = _r((last / prev - 1) * 100) if prev and len(after) else None
+        out["path"] = [{"d": d, "ret": _r((float(c) / price - 1) * 100)}
+                       for d, c in zip(after["d"].iloc[-PATH_DAYS:], after["close"].iloc[-PATH_DAYS:])]
         if len(after):
             out["max_up"] = _r((float(after["high"].max()) / price - 1) * 100)
             out["max_dn"] = _r((float(after["low"].min()) / price - 1) * 100)

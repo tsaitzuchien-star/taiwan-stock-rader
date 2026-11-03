@@ -398,6 +398,7 @@ def test_hub_intraday_uses_kline_then_live_minutes(monkeypatch):
     hub.connect()
     with hub.client._lock:
         hub.client._record_minute("2330", {"price": 10.5, "total_vol": 9, "time": "09:02:00"}, now=DT.now())
+    hub.client._record_minute = lambda *a, **k: None   # 測試在盤中時段跑時，假報價不要再多記一根
     r = hub.intraday("2330", "TWSE")
     assert [b[0] for b in r["bars"]] == ["09:01", "09:02"] and r["source"] == "1 分 K"
     assert "2330" in hub.client.subscribed

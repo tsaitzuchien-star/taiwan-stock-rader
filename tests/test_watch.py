@@ -45,6 +45,8 @@ def test_tracks_horizons_and_stats(tmp_path):
     assert r["2330"]["d3"] == pytest.approx((1.01 ** 3 - 1) * 100, abs=0.01)
     assert r["2330"]["d10"] == pytest.approx((1.01 ** 10 - 1) * 100, abs=0.01)
     assert r["6488"]["d5"] < 0 and r["2330"]["days"] == 19
+    assert len(r["2330"]["path"]) == 10 and r["2330"]["day_chg"] == pytest.approx(1.0, abs=0.01)
+    assert r["2330"]["path"][-1]["ret"] == r["2330"]["ret"]
     assert r["2330"]["d5_bench"] == pytest.approx((100 + 65 * 0.1) / (100 + 60 * 0.1) * 100 - 100, abs=0.01)
     st = rep["stats"][0]
     assert st["name"] == "老牛翻身" and st["n"] == 2 and st["d5"]["win"] == 50 and st["d5"]["beat"] == 50
@@ -85,3 +87,13 @@ def test_apply_live_quotes():
     assert r["live"] and r["last"] == 105.0 and r["ret"] == 5.0
     assert r["max_up"] == 7.0 and r["max_dn"] == -2.0 and r["bench_ret"] == 2.0
     assert "live" not in rows[1]
+
+
+def test_daily_path_and_day_change(tmp_path):
+    from radar.watch import apply_live
+    rows = [{"code": "2330", "added_date": "2026-11-02", "price": 100.0, "last": 102.0, "days": 1,
+             "path": [{"d": "2026-11-03", "ret": 2.0}]}]
+    apply_live(rows, {"2330": {"price": 105.0, "prev_close": 102.0}}, "2026-11-04")
+    r = rows[0]
+    assert r["day_chg"] == 2.94 and r["path"][-1] == {"d": "2026-11-04", "ret": 5.0, "live": True}
+    assert len(r["path"]) == 2

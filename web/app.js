@@ -1172,22 +1172,29 @@ function WatchPage({ health }) {
   }, [rep?.live?.closed, !!rep?.live]);
   const del = (w) => { if (confirm(`把 ${w.code} ${w.name}（${w.added_date} 加入）從觀察名單移除？`)) api(`/api/watch/${w.id}`, { method: 'DELETE' }).then(load); };
   const pct = (v, bench) => (v == null ? html`<span class="mut">—</span>` : html`<span class=${`num ${cls(v)}`}>${signed(v, 1, '%')}</span>
-    ${bench != null && html`<div class="eparts num">0050 ${signed(bench, 1, '%')}</div>`}`);
+    ${bench != null && html`<div class="eparts num">同期0050 ${signed(bench, 1, '%')}</div>`}`);
+  const path = (w) => (!w.path?.length ? html`<span class="mut">—</span>` : html`<div class="wpath">${w.path.map((p, i) => html`
+    <span class=${`wday ${cls(p.ret)}`} title=${`${p.d}${p.live ? '（盤中）' : ''} 累計 ${signed(p.ret, 1, '%')}`}>
+      <i>${p.live ? '今' : `D${w.days - w.path.length + i + 1 + (w.live ? 1 : 0)}`}</i>${signed(p.ret, 1, '%')}</span>`)}</div>`);
   if (err) return html`<div class="panel"><div class="empty up">${err}</div></div>`;
   if (!rep) return html`<div class="panel"><div class="empty">讀取中…</div></div>`;
   return html`
     <section class="panel">
-      <div class="ph">觀察名單${rep.live ? html` <span class="tag hot">${rep.live.closed ? '今日收盤' : '盤中即時'} ${rep.live.time || ''}</span>` : ''}<span class="sub">以加入當天收盤價為基準 · 3 天／1 週／2 週 = 之後第 3／5／10 個交易日收盤</span></div>
+      <div class="ph">觀察名單${rep.live ? html` <span class="tag hot">${rep.live.closed ? '今日收盤' : '盤中即時'} ${rep.live.time || ''}</span>` : ''}<span class="sub">以加入當天收盤價為基準 · 今日 = 今天漲跌 · 每日進度 = 加入後每個交易日收盤的累計報酬（D1 = 第 1 天） · 3 天／1 週／2 週 = 之後第 3／5／10 個交易日收盤 · 平日 18:30 自動更新</span></div>
       ${!rep.rows.length ? html`<div class="empty">還沒有觀察的股票。到 <a href="#/radar">雷達掃描</a> 或個股分析按「＋ 觀察」，就會記下當天的價格和進場分數。</div>` : html`
-      <div class="tablewrap"><table>
-        <thead><tr><th class="l">代號</th><th class="l">名稱</th><th class="l">來源</th><th class="l">加入日</th><th>加入價</th><th>進場分數</th>
-          ${HZ.map(([, l]) => html`<th>${l}後</th>`)}<th>至今</th><th>期間最高</th><th>期間最低</th><th class="l">狀態</th><th></th></tr></thead>
+      <div class="tablewrap"><table class="watchtbl">
+        <thead><tr><th class="l stick">股票</th><th>今日</th><th>至今</th><th class="l">每日進度（加入後累計）</th>
+          ${HZ.map(([, l]) => html`<th>${l}後</th>`)}<th>進場分數</th><th class="l">來源</th><th class="l">加入日</th><th>加入價</th>
+          <th>期間最高</th><th>期間最低</th><th class="l">狀態</th><th></th></tr></thead>
         <tbody>${rep.rows.map((w) => html`<tr onClick=${() => { location.hash = `#/stock/${w.code}`; }}>
-          <td class="l num acc">${w.code}</td><td class="l">${w.name}</td><td class="l mut">${w.source}</td>
-          <td class="l num">${w.added_date}</td><td class="num">${fmt(w.price)}</td>
-          <td><${EntryScore} r=${{ ...w, entry_parts: w.parts }} /></td>
-          ${HZ.map(([k]) => html`<td>${pct(w[k], w[`${k}_bench`])}</td>`)}
+          <td class="l stick"><span class="num acc">${w.code}</span> ${w.name}</td>
+          <td class=${`num ${cls(w.day_chg)}`}>${w.day_chg == null ? '—' : signed(w.day_chg, 2, '%')}</td>
           <td>${pct(w.ret, w.bench_ret)}<div class="eparts num">${w.last != null ? `${w.live ? '即時' : '現價'} ${fmt(w.last)}` : ''}</div></td>
+          <td class="l">${path(w)}</td>
+          ${HZ.map(([k]) => html`<td>${pct(w[k], w[`${k}_bench`])}</td>`)}
+          <td><${EntryScore} r=${{ ...w, entry_parts: w.parts }} /></td>
+          <td class="l mut">${w.source}</td>
+          <td class="l num">${w.added_date}</td><td class="num">${fmt(w.price)}</td>
           <td class=${`num ${cls(w.max_up)}`}>${w.max_up == null ? '—' : signed(w.max_up, 1, '%')}</td>
           <td class=${`num ${cls(w.max_dn)}`}>${w.max_dn == null ? '—' : signed(w.max_dn, 1, '%')}</td>
           <td class="l mut" style="white-space:nowrap">${w.days >= 10 ? '已滿 2 週' : w.live ? `第 ${w.days + 1} 個交易日（盤中）` : `第 ${w.days} 個交易日`}</td>
