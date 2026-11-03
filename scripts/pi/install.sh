@@ -40,8 +40,11 @@ echo "== 4/5 準備設定檔 =="
 mkdir -p data logs "$SDK_DIR"
 if [ ! -f config.local.toml ]; then
   cp config.example.toml config.local.toml
-  sed -i "s#^sdk_dir = .*#sdk_dir = '$SDK_DIR'   # 元大 linux-arm64 元件資料夾#" config.local.toml
   echo "已建立 config.local.toml，請之後填入元大帳號、密碼與 cert_path。"
+fi
+# 範例檔裡是 Windows 路徑：換成樹莓派上的元大元件資料夾（已經改過就不動）
+if grep -qE "^sdk_dir *= *['\"]?[A-Za-z]:" config.local.toml; then
+  sed -i "s|^sdk_dir *=.*|sdk_dir = '$SDK_DIR'   # 元大 linux-arm64 元件資料夾|" config.local.toml
 fi
 chmod 600 config.local.toml
 if [ ! -f "$SDK_DIR/YuantaSparkAPI.dll" ]; then
