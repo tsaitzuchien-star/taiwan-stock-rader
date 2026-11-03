@@ -286,3 +286,54 @@ def test_certificate_error_stops_login_retries(monkeypatch):
     with pytest.raises(YuantaError, match="憑證"):
         c.connect()
     assert len([x for x in t.calls if x[0] == "Login"]) == 1 and not c.logged_in
+
+
+def test_reconnect_after_server_drops_connection(monkeypatch):
+    """元大清晨把連線踢掉後，再連一次要換新的元件物件重新 Open，不能等舊的（舊的永遠不會再連上）。"""
+    monkeypatch.setattr("radar.yuanta.client.time.sleep", lambda s: None)
+    monkeypatch.setattr("radar.yuanta.client.CONNECT_TIMEOUT", 1)
+    traders = [FakeTrader(), FakeTrader()]
+    sdk = fake_sdk(traders[0])
+    sdk.Trader = lambda *a: traders.pop(0)
+    t1, t2 = traders
+    c = YuantaClient(YuantaConfig(account="S98875005091", password="1234", environment="UAT"),
+                     sdk=sdk, limiter=RateLimiter(sleep=lambda s: None), timeout=2)
+    c.connect()
+    c.subscribed.add("2330")
+    for idx in (2, 3, 5):   # 05:05 已斷線 / LogOut
+        c.on_response(0, idx, "", None, "Disconnected")
+    assert not c.logged_in
+    info = c.connect()
+    assert info["ok"] and c.logged_in
+    assert ("Open", "UAT") in t2.calls and [x for x in t2.calls if x[0] == "Login"]
+    assert c.subscribed == set()   # 新連線要重新訂閱
+
+
+def test_hub_auto_reconnect_limits(monkeypatch):
+    from datetime import datetime
+    from radar.api import yuanta_hub as H
+    from radar.config import Settings
+    monkeypatch.setattr("radar.yuanta.client.time.sleep", lambda s: None)
+    made = []
+
+    def factory(cfg):
+        c, t = make_client()
+        made.append(t)
+        return c
+    hub = H.YuantaHub(Settings(yuanta={"account": "S98875005091", "password": "1", "sdk_dir": "."}), factory=factory)
+    monday_9am = datetime(2026, 11, 2, 9, 0)
+    assert not hub.auto_reconnect(monday_9am, mono=0)        # 今天還沒成功登入過：不自動登入
+    hub.connect()
+    assert not hub.auto_reconnect(monday_9am, mono=0)        # 還連著
+    hub.client.logged_in = False
+    hub.client._connected.clear()
+    assert not hub.auto_reconnect(datetime(2026, 11, 2, 5, 10), mono=0)   # 清晨維護時段不碰
+    assert not hub.auto_reconnect(datetime(2026, 11, 7, 9, 0), mono=0)    # 週末不碰
+    assert hub.auto_reconnect(monday_9am, mono=0) and hub.logged_in
+    hub.client.logged_in = False
+    assert not hub.auto_reconnect(monday_9am, mono=60)       # 10 分鐘內不再試
+    for i in range(1, H.RECONNECT_MAX_PER_DAY):
+        hub.client.logged_in = False
+        assert hub.auto_reconnect(monday_9am, mono=i * 1000)
+    hub.client.logged_in = False
+    assert not hub.auto_reconnect(monday_9am, mono=99_999)   # 一天最多 6 次

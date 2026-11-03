@@ -298,7 +298,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     hub.connect()
                 except Exception:  # noqa: BLE001
                     pass   # 錯誤訊息存在 hub.error，持倉風控頁會顯示
+
+            def watchdog():   # 元大清晨會踢掉連線：白天每分鐘檢查一次，斷了就自動接回
+                while True:
+                    time.sleep(60)
+                    try:
+                        hub.auto_reconnect()
+                    except Exception:  # noqa: BLE001
+                        pass
             threading.Thread(target=run, daemon=True).start()
+            threading.Thread(target=watchdog, daemon=True).start()
 
     @app.on_event("shutdown")
     def _logout_yuanta():

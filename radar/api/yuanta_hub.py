@@ -16,6 +16,9 @@ from ..config import Settings
 from ..yuanta.client import YuantaClient, YuantaConfig, YuantaError
 
 HOLDINGS_TTL = 20.0
+RECONNECT_GAP = 600.0       # 自動重連至少隔 10 分鐘
+RECONNECT_MAX_PER_DAY = 6   # 每天最多自動重連幾次（元大有每日登入次數限制）
+RECONNECT_HOURS = ((7, 30), (21, 30))   # 只在這段時間自動重連（元大清晨維護時段不碰）
 MARKET_TTL = 60.0          # 全市場即時快照最多每分鐘更新一次（約 4 次查詢，遠低於元大限制）
 
 
@@ -38,6 +41,10 @@ class YuantaHub:
         self._market_at = 0.0
         self.market_time: str | None = None
         self._market_busy = threading.Lock()
+        self.ever_logged_in = False
+        self._auto_day: str | None = None
+        self._auto_count = 0
+        self._auto_last = -1e9
 
     # ---------------------------------------------------------------- 狀態
     @property
@@ -72,12 +79,41 @@ class YuantaHub:
                     self.client = self._factory(self.config)
                 self.client.connect()
                 self.connected_at = time.strftime("%H:%M:%S")
+                self.ever_logged_in = True
+                self._holdings, self._holdings_at = None, 0.0
             except Exception as e:  # noqa: BLE001
                 self.error = str(e)
                 raise YuantaError(self.error) from e
             finally:
                 self.connecting = False
         return self.status()
+
+    def auto_reconnect(self, now=None, mono: float | None = None) -> bool:
+        """斷線後自動接回（例如元大清晨把連線踢掉）。只在今天登入成功過、白天時段，
+        而且每 10 分鐘最多試一次、每天最多 6 次，避免用光登入次數或被判定登入過於頻繁。"""
+        from datetime import datetime
+        now = now or datetime.now()
+        mono = time.monotonic() if mono is None else mono
+        c = self.client
+        if not self.configured or not self.ever_logged_in or self.logged_in or self.connecting or c is None:
+            return False
+        if c.cert_error or c.suspended_until > time.monotonic():
+            return False
+        if now.weekday() >= 5 or not (RECONNECT_HOURS[0] <= (now.hour, now.minute) <= RECONNECT_HOURS[1]):
+            return False
+        day = now.strftime("%Y-%m-%d")
+        if self._auto_day != day:
+            self._auto_day, self._auto_count = day, 0
+        if self._auto_count >= RECONNECT_MAX_PER_DAY or mono - self._auto_last < RECONNECT_GAP:
+            return False
+        self._auto_count += 1
+        self._auto_last = mono
+        c.messages.append(f"{now:%H:%M:%S} 自動重新連線（今天第 {self._auto_count} 次）")
+        try:
+            self.connect()
+        except Exception:  # noqa: BLE001
+            pass   # 錯誤訊息存在 self.error，持倉風控頁會顯示
+        return True
 
     def disconnect(self) -> dict:
         with self._lock:

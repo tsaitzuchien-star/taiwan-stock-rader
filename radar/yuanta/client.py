@@ -367,6 +367,11 @@ class YuantaClient:
                 raise YuantaError("；".join(problems))
             if self._sdk is None:
                 self._sdk = load_sdk(self.config.sdk_dir)
+            if self._api is not None and not self._connected.is_set():
+                # 元大主機每天清晨會把連線踢掉（系統：已斷線 / LogOut）。舊的元件物件不會再自己連回來，
+                # 一直等它只會逾時，要丟掉換一個新的再 Open。
+                self._note("上一次的連線已被元大中斷，重新建立連線")
+                self._drop_api()
             if self._api is None:
                 log_dir = Path(self.config.log_dir) if self.config.log_dir else DEFAULT_LOG_DIR
                 log_dir.mkdir(parents=True, exist_ok=True)
@@ -379,6 +384,7 @@ class YuantaClient:
                     api.SetPMMServerCheck(False)
                 env = self._sdk.Env.UAT if self.config.environment.upper() == "UAT" else self._sdk.Env.PROD
                 self._api = api
+                self.events_seen = 0
                 self._note(f"開啟連線（{self.config.environment.upper()}）…")
                 api.Open(env)
             if not self._connected.wait(CONNECT_TIMEOUT):
@@ -446,6 +452,22 @@ class YuantaClient:
             self._note(f"登入成功：{info['message']}")
             time.sleep(1)  # 元大範例：登入後稍等再呼叫其他功能
             return info
+
+    def _drop_api(self) -> None:
+        api, self._api = self._api, None
+        try:
+            api.OnResponse -= self._handler
+        except Exception:  # noqa: BLE001
+            pass
+        for fn in ("Close", "Dispose"):
+            try:
+                getattr(api, fn)()
+            except Exception:  # noqa: BLE001
+                pass
+        self.logged_in = False
+        self._connected.clear()
+        with self._lock:
+            self.subscribed.clear()   # 新連線要重新訂閱
 
     def close(self) -> None:
         with self._connect_lock:
