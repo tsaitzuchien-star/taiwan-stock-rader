@@ -337,3 +337,66 @@ def test_hub_auto_reconnect_limits(monkeypatch):
         assert hub.auto_reconnect(monday_9am, mono=i * 1000)
     hub.client.logged_in = False
     assert not hub.auto_reconnect(monday_9am, mono=99_999)   # 一天最多 6 次
+
+
+def test_parse_kline_minutes_and_time():
+    from datetime import datetime as DT
+    from radar.yuanta.parsers import parse_kline_minutes, to_minute
+    r = NS(KLineList=[NS(TimeStamp=DT(2026, 11, 3, 9, 1), OpenPrice=10, HighPrice=11, LowPrice=9.5, ClosePrice=10.5, DealVol=12),
+                      NS(TimeStamp="2026/11/03 9:02:00", OpenPrice=10.5, HighPrice=10.6, LowPrice=10.4, ClosePrice=10.6, DealVol=3)])
+    df = parse_kline_minutes(r)
+    assert list(df["time"]) == ["09:01", "09:02"] and df["close"].tolist() == [10.5, 10.6]
+    assert to_minute(NS(Hour=13, Minute=5)) == "13:05" and to_minute("2026/11/03") is None
+
+
+def test_minute_bars_from_quotes(monkeypatch):
+    from datetime import datetime as DT
+    c, _ = make_client()
+    day = DT.now().replace(hour=9, minute=5)
+    with c._lock:
+        c._record_minute("2330", {"price": 100.0, "total_vol": 10, "time": "09:05:01"}, now=day)
+        c._record_minute("2330", {"price": 102.0, "total_vol": 15, "time": "09:05:40"}, now=day)
+        c._record_minute("2330", {"price": 101.0, "total_vol": 18, "time": "09:06:02"}, now=day)
+        c._record_minute("2330", {"price": 99.0, "total_vol": 18, "time": "08:59:00"}, now=day)   # 開盤前不記
+    bars = c.minute_bars("2330")
+    assert bars[0] == ("09:05", 100.0, 102.0, 100.0, 102.0, None)
+    assert bars[1] == ("09:06", 101.0, 101.0, 101.0, 101.0, 3)
+
+
+def test_minute_kline_type_lookup():
+    c, _ = make_client()
+    c._sdk.KLineType = NS(Day=11, Week=12, Min5=2, Min1=1, Min15=3)
+    assert c.minute_kline_type() == 1
+    c2, _ = make_client()
+    c2._sdk.KLineType = NS(Day=11, Week=12)
+    assert c2.minute_kline_type() is None and c2._kline_minute_type is False
+
+
+def test_hub_intraday_uses_kline_then_live_minutes(monkeypatch):
+    from datetime import date as D, datetime as DT
+    from radar.api import yuanta_hub as H
+    from radar.config import Settings
+    monkeypatch.setattr("radar.yuanta.client.time.sleep", lambda s: None)
+    t = FakeTrader()
+    today = D.today()
+
+    def kline(acct, kind, mkt, code, s, e):
+        t.calls.append(("GetKLine", kind))
+        t._emit(1, 999, "GetKLine", NS(KLineList=[
+            NS(TimeStamp=DT(today.year, today.month, today.day, 9, 1), OpenPrice=10, HighPrice=10, LowPrice=10, ClosePrice=10, DealVol=5)]))
+        return True
+    t.GetKLine = kline
+
+    def factory(cfg):
+        c, _ = make_client(trader=t)
+        c._sdk.KLineType = NS(Day=11, Min1=1)
+        return c
+    hub = H.YuantaHub(Settings(yuanta={"account": "S98875005091", "password": "1", "sdk_dir": "."}), factory=factory)
+    hub.connect()
+    with hub.client._lock:
+        hub.client._record_minute("2330", {"price": 10.5, "total_vol": 9, "time": "09:02:00"}, now=DT.now())
+    r = hub.intraday("2330", "TWSE")
+    assert [b[0] for b in r["bars"]] == ["09:01", "09:02"] and r["source"] == "1 分 K"
+    assert "2330" in hub.client.subscribed
+    hub.intraday("2330", "TWSE")
+    assert sum(1 for x in t.calls if x[0] == "GetKLine") == 1   # 30 秒內不重查

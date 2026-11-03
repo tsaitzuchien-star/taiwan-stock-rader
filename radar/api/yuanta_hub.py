@@ -16,6 +16,7 @@ from ..config import Settings
 from ..yuanta.client import YuantaClient, YuantaConfig, YuantaError
 
 HOLDINGS_TTL = 20.0
+INTRADAY_TTL = 30.0         # 同一檔 1 分 K 最多 30 秒查一次（GetKLine 每秒限 1 次）
 RECONNECT_GAP = 600.0       # 自動重連至少隔 10 分鐘
 RECONNECT_MAX_PER_DAY = 6   # 每天最多自動重連幾次（元大有每日登入次數限制）
 RECONNECT_HOURS = ((7, 30), (21, 30))   # 只在這段時間自動重連（元大清晨維護時段不碰）
@@ -42,6 +43,7 @@ class YuantaHub:
         self.market_time: str | None = None
         self._market_busy = threading.Lock()
         self.ever_logged_in = False
+        self._intraday: dict[str, tuple[float, list]] = {}
         self._auto_day: str | None = None
         self._auto_count = 0
         self._auto_last = -1e9
@@ -176,6 +178,36 @@ class YuantaHub:
             threading.Thread(target=run, daemon=True).start()
         else:
             run()
+
+    def intraday(self, code: str, market: str) -> dict:
+        """今天的分時走勢：元大 1 分 K 為主，最新幾分鐘用即時報價補上。"""
+        from datetime import datetime
+        c = self._client()
+        if code not in c.subscribed:   # 開著這頁時這檔要有即時推播
+            try:
+                c.snapshot([(code, market)])
+                c.subscribe([(code, market)])
+            except YuantaError as e:
+                c.messages.append(f"{code} 即時報價訂閱失敗：{e}")
+        now = time.monotonic()
+        hit = self._intraday.get(code)
+        kbars, source = (hit[1] if hit else []), "1 分 K"
+        if hit is None or now - hit[0] > INTRADAY_TTL:
+            try:
+                df = c.intraday_kline(code, market, date.today())
+                kbars = [(r.time, r.open, r.high, r.low, r.close, r.volume) for r in df.itertuples()]
+            except YuantaError as e:
+                kbars = []
+                c.messages.append(f"{code} 1 分 K 查詢失敗，改用即時報價累積：{e}")
+            self._intraday[code] = (now, kbars)
+        mine = c.minute_bars(code)
+        last_k = kbars[-1][0] if kbars else ""
+        bars = list(kbars) + [b for b in mine if b[0] > last_k]
+        if not kbars:
+            source = "即時報價累積（打開戰情室之後才有）" if bars else ""
+        with c._lock:
+            q = dict(c.quotes.get(code) or {})
+        return {"bars": bars, "quote": q, "source": source, "time": datetime.now().strftime("%H:%M:%S")}
 
     def realized(self, days: int) -> pd.DataFrame:
         end = date.today()

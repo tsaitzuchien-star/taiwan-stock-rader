@@ -141,3 +141,8 @@ def test_monster_tactic_finds_base_breakout_limit_up(tmp_path):
     r = c.post("/api/scan", json={"tactic": "monster", "params": {"p": 1000}}).json()
     assert [x["code"] for x in r["rows"]] == ["3001"]
     assert [x["code"] for x in c.post("/api/scan", json={"tactic": "monster_hi"}).json()["rows"]] == ["3001"]
+
+
+def test_intraday_needs_yuanta(client):
+    r = client.get("/api/stock/1101/intraday").json()
+    assert r["available"] is False and "元大" in r["reason"]

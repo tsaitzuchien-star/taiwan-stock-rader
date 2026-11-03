@@ -2,7 +2,7 @@
 import { h, render } from 'preact';
 import { useState, useEffect, useRef, useMemo } from 'preact/hooks';
 import htm from 'htm';
-import { createChart, CandlestickSeries, LineSeries, HistogramSeries, CrosshairMode } from 'lightweight-charts';
+import { createChart, CandlestickSeries, LineSeries, HistogramSeries, BaselineSeries, CrosshairMode } from 'lightweight-charts';
 
 const html = htm.bind(h);
 const C = { up: '#FF5A5F', down: '#2BC48A', accent: '#F5A524', blue: '#5B8DEF', muted: '#8B95A8', line: '#1E2533', grid: '#161C28' };
@@ -853,6 +853,63 @@ function KChart({ data }) {
   return html`<div class="chart" ref=${el}></div>`;
 }
 
+function IntradayChart({ d }) {
+  const el = useRef(null);
+  useEffect(() => {
+    if (!el.current || !d?.points?.length) return undefined;
+    const chart = createChart(el.current, {
+      autoSize: true,
+      layout: { background: { color: 'transparent' }, textColor: C.muted, fontFamily: 'Consolas, monospace' },
+      grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
+      rightPriceScale: { borderColor: C.line },
+      timeScale: { borderColor: C.line, timeVisible: true, secondsVisible: false, fixLeftEdge: true, fixRightEdge: true },
+      localization: { locale: 'zh-TW', timeFormatter: (t) => new Date(t * 1000).toISOString().slice(11, 16) },
+      crosshair: { mode: CrosshairMode.Normal },
+    });
+    const base = d.prev_close || d.points[0].close;
+    const line = chart.addSeries(BaselineSeries, {
+      baseValue: { type: 'price', price: base }, lineWidth: 2,
+      topLineColor: C.up, topFillColor1: 'rgba(255,90,95,.28)', topFillColor2: 'rgba(255,90,95,.04)',
+      bottomLineColor: C.down, bottomFillColor1: 'rgba(43,196,138,.04)', bottomFillColor2: 'rgba(43,196,138,.28)',
+      priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+    });
+    const data = d.points.map((p) => ({ time: p.time, value: p.close }));
+    if (data[data.length - 1].time < d.end) data.push({ time: d.end });   // 橫軸一直畫到 13:30
+    line.setData(data);
+    line.createPriceLine({ price: base, color: '#5A6478', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '昨收' });
+    line.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.25 } });
+    const vol = chart.addSeries(HistogramSeries, { priceScaleId: 'vol', priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false });
+    vol.setData(d.points.filter((p) => p.volume != null).map((p) => ({ time: p.time, value: p.volume, color: p.close >= base ? 'rgba(255,90,95,.45)' : 'rgba(43,196,138,.45)' })));
+    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+    chart.timeScale().fitContent();
+    return () => chart.remove();
+  }, [d]);
+  return html`<div class="chart intraday" ref=${el}></div>`;
+}
+
+function Intraday({ code }) {
+  const [d, setD] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    setD(null);
+    const load = () => api(`/api/stock/${code}/intraday`).then((r) => { if (alive) setD(r); }).catch(() => {});
+    load();
+    const t = setInterval(() => { if (!document.hidden) load(); }, 20000);   // 盤中每 20 秒更新
+    return () => { alive = false; clearInterval(t); };
+  }, [code]);
+  if (!d) return html`<div class="empty">讀取今日走勢…</div>`;
+  if (!d.available) return html`<div class="empty mut">${d.reason}</div>`;
+  if (!d.points.length) return html`<div class="empty mut">今天還沒有成交資料（9:00 開盤後才會出現）。</div>`;
+  return html`
+    <div class="ibar"><span class=${`num big ${cls(d.chg)}`}>${fmt(d.price)}</span>
+      <span class=${`num ${cls(d.chg)}`}>${signed(d.chg)} ${signed(d.chg_pct, 2, '%')}</span>
+      <span class="mut">昨收 <span class="num">${fmt(d.prev_close)}</span></span>
+      ${d.high != null && html`<span class="mut">高 <span class="num up">${fmt(d.high)}</span> 低 <span class="num dn">${fmt(d.low)}</span></span>`}
+      ${d.total_vol != null && html`<span class="mut">量 <span class="num">${fmt(d.total_vol, 0)}</span> 張</span>`}</div>
+    <${IntradayChart} d=${d} />
+    <div class="mut small" style="padding:0 8px">${d.closed ? '今日已收盤' : '盤中每 20 秒更新'} · ${d.time} · 資料來源：元大${d.source ? ` ${d.source}` : ''}</div>`;
+}
+
 function StockSearch({ stocks, current }) {
   const [q, setQ] = useState('');
   const go = (e) => {
@@ -1002,7 +1059,9 @@ function Stock({ code, stocks, health }) {
       </section>
       <div class="row">
         <div class="panel" style="flex:999 1 560px">
-          <div class="ph">K 線圖
+          <div class="ph">今日即時走勢<span class="sub">紅色在昨收之上、綠色在昨收之下</span></div>
+          <div style="padding:8px 8px 4px"><${Intraday} code=${code} /></div>
+          <div class="ph" style="border-top:1px solid var(--line)">K 線圖
             <span class="seg">${TF.map(([k, l]) => html`<button type="button" class=${tf === k ? 'on' : ''} onClick=${() => pickTf(k)}>${l}</button>`)}</span>
             <span class="sub">${bars} 根${unit} K · 資料庫保留 ${data.history_days || data.candles.length} 個交易日</span></div>
           <div class="legend"><span style="color:#C9D1E0">— 5${unit}線</span><span class="acc">— 20${unit}線</span><span style="color:var(--blue)">— 60${unit}線</span><span class="mut">— 布林通道</span></div>
