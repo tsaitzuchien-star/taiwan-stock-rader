@@ -297,6 +297,34 @@ def parse_kline(result: Any) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
 
 
+def to_minute(v: Any) -> str | None:
+    """K 線 TimeStamp（.NET DateTime / datetime / 'yyyy/MM/dd HH:mm:ss'）-> 'HH:MM'。"""
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.strftime("%H:%M")
+    h, m = field(v, "Hour"), field(v, "Minute")
+    if h is not None and m is not None:
+        return f"{int(h):02d}:{int(m):02d}"
+    parts = str(v).strip().split(" ")
+    if len(parts) > 1 and ":" in parts[1]:
+        hh, mm = parts[1].split(":")[:2]
+        return f"{int(hh):02d}:{int(mm):02d}"
+    return None
+
+
+def parse_kline_minutes(result: Any) -> pd.DataFrame:
+    """1 分 K -> date/time(HH:MM)/open/high/low/close/volume（張）。"""
+    rows = []
+    for k in items(field(result, "KLineList")):
+        ts = field(k, "TimeStamp")
+        rows.append({"date": to_date(ts), "time": to_minute(ts),
+                     "open": num(field(k, "OpenPrice")), "high": num(field(k, "HighPrice")),
+                     "low": num(field(k, "LowPrice")), "close": num(field(k, "ClosePrice")),
+                     "volume": num(field(k, "DealVol"), 0)})
+    return pd.DataFrame(rows, columns=["date", "time", "open", "high", "low", "close", "volume"])
+
+
 def snapshot_bars(quotes: Iterable[dict], day: date, lot_size: int = 1000) -> pd.DataFrame:
     """把盤中報價變成「今天」的日 K（成交量換算成股，和資料庫一致）。"""
     rows = []

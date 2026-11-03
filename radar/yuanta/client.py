@@ -236,6 +236,9 @@ class YuantaClient:
         self.logged_in = False
         self.login_info: dict = {}
         self.quotes: dict[str, dict] = {}
+        self.minutes: dict[str, dict[str, list]] = {}   # 今天每分鐘的 [開, 高, 低, 收, 累計量]（自己從報價累積）
+        self._minutes_day = ""
+        self._kline_minute_type = None                  # 1 分 K 的列舉值（第一次用到時從元件裡找）
         self.subscribed: set[str] = set()
         self.messages: deque[str] = deque(maxlen=200)
         self.reports: deque[str] = deque(maxlen=200)
@@ -297,10 +300,35 @@ class YuantaClient:
         elif not name:
             self._note(f"回應：{value}")
 
+    def _record_minute(self, code: str, q: dict, now: datetime | None = None) -> None:
+        """把最新成交價記進今天的分鐘線（呼叫時要持有 self._lock）。"""
+        px = q.get("price")
+        if not px:
+            return
+        now = now or datetime.now()
+        day = now.strftime("%Y-%m-%d")
+        if day != self._minutes_day:
+            self.minutes, self._minutes_day = {}, day
+        hm = (q.get("time") or "")[:5]
+        if len(hm) != 5 or hm == "00:00":
+            hm = now.strftime("%H:%M")
+        if hm < "09:00" or hm > "13:30":
+            return
+        bars = self.minutes.setdefault(code, {})
+        b = bars.get(hm)
+        vol = q.get("total_vol")
+        if b is None:
+            bars[hm] = [px, px, px, px, vol]
+        else:
+            b[1], b[2], b[3] = max(b[1], px), min(b[2], px), px
+            b[4] = vol if vol is not None else b[4]
+
     def _on_push(self, idx: int, name: str, value: Any) -> None:
         if name == "SubscribeWatchlistAll":
             with self._lock:
-                parsers.apply_watchlist_push(self.quotes, value)
+                code = parsers.apply_watchlist_push(self.quotes, value)
+                if code:
+                    self._record_minute(code, self.quotes[code])
         elif name.startswith("RR_"):
             self.reports.append(f"{datetime.now():%H:%M:%S} {name} {value}")
         elif idx == 1:
@@ -531,6 +559,7 @@ class YuantaClient:
         with self._lock:
             for code, q in out.items():
                 self.quotes.setdefault(code, {}).update(q)
+                self._record_minute(code, self.quotes[code])
         return out
 
     def subscribe(self, codes: list[tuple[str, str]]) -> int:
@@ -564,6 +593,46 @@ class YuantaClient:
         with self._lock:
             data = {c: dict(q) for c, q in self.quotes.items() if codes is None or c in set(codes)}
         return parsers.quotes_frame(data, names)
+
+    def minute_kline_type(self):
+        """在元件的 KLineType 列舉裡找「1 分 K」（名稱各版本不同，用名稱比對）。找不到回傳 None。"""
+        if self._kline_minute_type is not None:
+            return self._kline_minute_type or None
+        import re
+        typ = self._sdk.KLineType
+        names = [n for n in dir(typ) if not n.startswith("_") and n[:1].isalpha()]
+        pick = None
+        for n in names:
+            if re.search(r"min|分", n, re.I) and re.search(r"(?<!\d)1(?!\d)|one", n, re.I):
+                pick = n
+                break
+        self._note(f"K 線類型：{', '.join(names[:20])}" + (f" → 1 分 K 用 {pick}" if pick else "（找不到 1 分 K）"))
+        self._kline_minute_type = getattr(typ, pick) if pick else False
+        return self._kline_minute_type or None
+
+    def intraday_kline(self, code: str, market: str, day: date) -> pd.DataFrame:
+        """今天的 1 分 K（元大規定 1 分 K 單次最多 20 天，這裡只查一天）。"""
+        kind = self.minute_kline_type()
+        if kind is None:
+            raise YuantaError("元大元件裡找不到 1 分 K 類型")
+        d = day.strftime("%Y/%m/%d")
+        r = self._request("GetKLine", lambda: self._api.GetKLine(
+            self.account, kind, self._market_enum(market), code, d, d), interval=KLINE_INTERVAL)
+        df = parsers.parse_kline_minutes(r)
+        return df[(df["date"] == day) & df["time"].notna()] if not df.empty else df
+
+    def minute_bars(self, code: str) -> list[tuple]:
+        """自己累積的今天分鐘線：[(HH:MM, 開, 高, 低, 收, 當分鐘量)]。"""
+        with self._lock:
+            if self._minutes_day != datetime.now().strftime("%Y-%m-%d"):
+                return []
+            bars = sorted((self.minutes.get(code) or {}).items())
+        out, prev = [], None
+        for hm, (o, h, l, c, cum) in bars:
+            vol = (cum - prev) if cum is not None and prev is not None and cum >= prev else None
+            out.append((hm, o, h, l, c, vol))
+            prev = cum if cum is not None else prev
+        return out
 
     def kline(self, code: str, market: str, start: date, end: date, kind: int = 11) -> pd.DataFrame:
         """K 線查詢（11 日 K / 12 週 K / 13 月 K）。日 K 單次最多 1 年。"""

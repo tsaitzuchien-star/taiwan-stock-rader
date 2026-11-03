@@ -410,6 +410,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"latest": today, **out, "above_ma60_pct": above, "live": True, "closed": closed,
                 "time": hub.market_time, "count": len(rows), "db_latest": db_latest}
 
+    @app.get("/api/stock/{code}/intraday")
+    def stock_intraday(code: str):
+        """今日分時走勢（元大即時）。"""
+        import calendar
+        hub, now = engine.yuanta, datetime.now()
+        today = now.strftime("%Y-%m-%d")
+        if not hub.logged_in:
+            return {"available": False, "reason": "元大還沒連線，連上之後這裡會顯示今天的即時走勢。"}
+        if now.weekday() >= 5:
+            return {"available": False, "reason": "今天休市，沒有即時走勢。"}
+        cache = engine.metrics()
+        market = cache["markets"].get(code) or "TWSE"
+        try:
+            r = hub.intraday(code, market)
+        except YuantaError as e:
+            return {"available": False, "reason": str(e)}
+        q = r["quote"]
+        prev = q.get("prev_close") or q.get("ref_price")
+        if not prev:   # 元大沒給昨收：用資料庫最後一天（還沒更新今天的話就是昨收）
+            g = cache["bars"][cache["bars"]["code"] == code]
+            g = g[g["date"].dt.strftime("%Y-%m-%d") < today]
+            prev = float(g["close"].iloc[-1]) if not g.empty else None
+        day = datetime.strptime(today, "%Y-%m-%d")
+
+        def ts(hm):   # 圖表用：把台北時間當成 UTC，橫軸才會顯示 09:00～13:30
+            h, m = int(hm[:2]), int(hm[3:5])
+            return calendar.timegm(day.replace(hour=h, minute=m).timetuple())
+        pts = [{"time": ts(hm), "hm": hm, "open": o, "high": h, "low": lo, "close": c_, "volume": v}
+               for hm, o, h, lo, c_, v in r["bars"] if c_]
+        price = q.get("price") or (pts[-1]["close"] if pts else None)
+        return radar_arena._clean({
+            "available": True, "date": today, "time": r["time"], "source": r["source"], "points": pts,
+            "prev_close": prev, "price": price, "open": q.get("open"), "high": q.get("high"), "low": q.get("low"),
+            "total_vol": q.get("total_vol"), "limit_up": q.get("limit_up"), "limit_down": q.get("limit_down"),
+            "chg": (price - prev) if price and prev else None,
+            "chg_pct": (price / prev - 1) * 100 if price and prev else None,
+            "start": ts("09:00"), "end": ts("13:30"), "closed": now.strftime("%H:%M") >= "13:31",
+        })
+
     @app.get("/api/stock/{code}")
     def stock(code: str, tf: str = "D"):
         cache = engine.metrics()

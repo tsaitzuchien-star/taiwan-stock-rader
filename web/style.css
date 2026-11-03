@@ -254,3 +254,8 @@ tr.tot td { font-weight: 700; border-top: 1px solid var(--line-strong); }
 .journal .wk { gap: 12px; }
 .journal .wk .big { font-size: 22px; font-weight: 600; }
 .ph .sub select { background: var(--bg-2, #141a26); color: var(--text); border: 1px solid var(--line, #2a3242); border-radius: 6px; padding: 2px 6px; font-size: 12px; }
+
+/* 今日即時走勢 */
+.chart.intraday { height: 260px; }
+.ibar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; padding: 0 8px 6px; font-size: 13px; }
+.ibar .big { font-size: 22px; font-weight: 700; }
