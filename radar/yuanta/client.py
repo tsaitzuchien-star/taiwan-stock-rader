@@ -612,11 +612,12 @@ class YuantaClient:
             names = [n for n in dir(typ) if not n.startswith("_") and n[:1].isalpha()
                      and not callable(getattr(typ, n, None))]
         self.kline_type_names = names
-        pick = None
+        pick = next((n for n in names if n in ("一分線", "一分K", "1分線", "1分K")), None)   # 正式環境元件：一分線
         for n in names:
-            if re.search(r"min|分", n, re.I) and re.search(r"(?<!\d)1(?!\d)|one", n, re.I):
-                pick = n
+            if pick:
                 break
+            if re.search(r"min|分", n, re.I) and re.search(r"(?<!\d)1(?!\d)|one|一分", n, re.I):
+                pick = n
         self._note(f"K 線類型：{', '.join(names[:20])}" + (f" → 1 分 K 用 {pick}" if pick else "（找不到 1 分 K）"))
         self._kline_minute_type = getattr(typ, pick) if pick else False
         return self._kline_minute_type or None
