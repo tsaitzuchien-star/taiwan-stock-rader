@@ -1,0 +1,22 @@
+# 台股雷達戰情室（由 scripts/pi/install.sh 安裝到 /etc/systemd/system/）
+[Unit]
+Description=Taiwan Stock Radar war room (port 8600, localhost only)
+Wants=network-online.target
+After=network-online.target time-sync.target
+# 一小時內最多自動重啟 4 次：避免反覆登入元大而被暫停或停權
+StartLimitIntervalSec=3600
+StartLimitBurst=4
+
+[Service]
+User=@USER@
+WorkingDirectory=@APP_DIR@
+Environment=TZ=Asia/Taipei
+Environment=PYTHONUNBUFFERED=1
+Environment=DOTNET_ROOT=@DOTNET_DIR@
+Environment=LD_LIBRARY_PATH=@SDK_DIR@
+ExecStart=@APP_DIR@/.venv/bin/python -m radar.api --no-browser
+Restart=on-failure
+RestartSec=120
+
+[Install]
+WantedBy=multi-user.target

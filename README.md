@@ -24,6 +24,19 @@
 3. 第一次使用請在畫面上方「📦 本地資料庫」按 **「⬇️ 更新資料庫」**，回補約 240 個交易日（約 1 年，第一次約 25 分鐘）。
 4. 之後每個交易日 14:30 後按一次更新（只要幾秒），或雙擊 **`更新資料庫.bat`**，也可以用 Windows「工作排程器」每天自動執行。
 
+## 樹莓派 5 常駐（Linux ARM64）
+
+元大官方有 `YuantaSparkAPI_linux-arm64_Python` 元件，樹莓派可以直接接元大。
+
+1. 樹莓派燒錄 **Raspberry Pi OS (64-bit)**，`git clone` 本專案。
+2. 把元大 linux-arm64 元件的所有檔案放到 `~/yuanta-sdk/`，把你本人的元大憑證匯出成 `.pfx` 放到樹莓派。
+3. 執行 `bash scripts/pi/install.sh`：裝 .NET 8、Python 環境、台北時區，並設定開機自動啟動（systemd 服務 `taiwan-radar`）。
+4. 在 `config.local.toml` 的 `[yuanta]` 填帳號、密碼、`sdk_dir`、`cert_path`、`cert_password`（Linux 一定要用 pfx 登入），
+   再 `sudo systemctl restart taiwan-radar`。
+5. 手機遠端：`sudo tailscale serve --bg 8600`（只在私人 tailnet，不要開 Funnel）。
+
+更新程式：`bash scripts/pi/update.sh`；元大連線測試：`bash scripts/pi/check_yuanta.sh`。
+
 ## 個人設定
 
 把 `config.example.toml` 複製成 `config.local.toml` 再修改（資料庫保留天數、元大連線等）。
