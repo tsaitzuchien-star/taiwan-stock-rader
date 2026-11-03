@@ -163,3 +163,131 @@ def _bucket_stats(rows: list[dict]) -> list[dict]:
         if sel:
             out.append({"name": name, **_summ(sel)})
     return out
+
+
+# ------------------------------------------------------------------ 每日檢討
+def _avg(vals):
+    vals = [v for v in vals if v is not None]
+    return _r(sum(vals) / len(vals)) if vals else None
+
+
+def daily_review(rows: list[dict], market: dict, extra: dict[str, dict] | None = None) -> dict | None:
+    """觀察名單當天的檢討：今天賺賠的主因、哪一類股票特別傷、之後怎麼修正。全部是規則化的判讀，不是投資建議。
+
+    market: {"date", "bench_chg", "up", "down", "above_ma60_pct"}；extra: {code: {"industry", "ret20"}}。
+    """
+    extra = extra or {}
+    sel = [r for r in rows if r.get("day_chg") is not None]
+    if not sel:
+        return None
+    n = len(sel)
+    avg = _avg([r["day_chg"] for r in sel])
+    bench = market.get("bench_chg")
+    up, down = market.get("up") or 0, market.get("down") or 0
+    down_ratio = down / (up + down) if up + down else None
+    losers = [r for r in sel if r["day_chg"] < 0]
+    beat = [r for r in sel if bench is not None and r["day_chg"] > bench]
+
+    def item(r):
+        e = extra.get(r["code"], {})
+        return {"code": r["code"], "name": r.get("name"), "day_chg": r["day_chg"], "ret": r.get("ret"),
+                "entry": r.get("entry"), "source": r.get("source"), "industry": e.get("industry")}
+
+    def groups(keyf, min_n=1):
+        g: dict[str, list[float]] = {}
+        for r in sel:
+            k = keyf(r)
+            if k:
+                g.setdefault(k, []).append(r["day_chg"])
+        out = [{"name": k, "n": len(v), "avg": _avg(v)} for k, v in g.items() if len(v) >= min_n]
+        return sorted(out, key=lambda x: x["avg"])
+
+    def bucket(r):
+        e = r.get("entry")
+        return None if e is None else next((name for name, lo, hi in BUCKETS if lo <= e < hi), None)
+
+    by_bucket = groups(bucket)
+    by_source = groups(lambda r: r.get("source"))
+    by_ind = groups(lambda r: extra.get(r["code"], {}).get("industry"), min_n=2)
+
+    # 漲多股：今天以前 20 日漲幅 ≥ 20%
+    def ret20_before(r):
+        v = extra.get(r["code"], {}).get("ret20")
+        return None if v is None else ((1 + v / 100) / (1 + r["day_chg"] / 100) - 1) * 100
+    hot = [r for r in sel if (ret20_before(r) or 0) >= 20]
+    cold = [r for r in sel if r not in hot]
+
+    causes, fixes = [], []
+    big_drop = bench is not None and bench <= -1.5
+    crash = (down_ratio or 0) >= 0.75 or (big_drop and (down_ratio or 0) >= 0.6)
+    if crash:
+        causes.append({"level": "danger", "title": "大盤系統性重挫是主因",
+                       "text": f"0050 {bench:+.1f}%，全市場下跌 {down} 家、上漲 {up} 家；"
+                               f"觀察名單 {n} 檔中 {len(losers)} 檔下跌。這種日子幾乎沒有股票躲得掉，不是個別選股失準。"})
+        fixes.append("加「大盤濾網」：0050 單日跌超過 1.5%、或下跌家數超過 75%、或站上季線的股票不到 30% 時，暫停新進場、新加入的部位減半。")
+    elif big_drop:
+        causes.append({"level": "warn", "title": "權值股重挫，但多數股票沒跟跌",
+                       "text": f"0050 {bench:+.1f}%，可是全市場上漲 {up} 家、下跌 {down} 家，賣壓集中在大型權值股。"})
+    elif bench is not None and bench < 0:
+        causes.append({"level": "warn", "title": "大盤偏弱",
+                       "text": f"0050 {bench:+.1f}%，下跌 {down} 家、上漲 {up} 家。"})
+    if avg is not None and bench is not None:
+        diff = avg - bench
+        if diff <= -1:
+            causes.append({"level": "warn", "title": f"觀察股比大盤多跌 {abs(diff):.1f}%",
+                           "text": f"平均 {avg:+.1f}%，只有 {len(beat)}/{n} 檔贏 0050。選到的多是波動大的中小型股，大盤一跌就跌更兇（高 β）。"})
+            fixes.append("名單裡高波動股（妖股、中小型）要搭配更緊的停損，或同時放幾檔權值股平衡。")
+        elif diff >= 1:
+            causes.append({"level": "ok", "title": f"觀察股比大盤抗跌 {diff:.1f}%",
+                           "text": f"平均 {avg:+.1f}%，{len(beat)}/{n} 檔贏 0050，選股本身有加分。"})
+    hi = next((b for b in by_bucket if b["name"] == BUCKETS[0][0]), None)
+    lo = next((b for b in by_bucket if b["name"] == BUCKETS[2][0]), None)
+    if hi and lo and hi["n"] >= 2 and lo["n"] >= 2:
+        gap = hi["avg"] - lo["avg"]
+        if gap >= 1:
+            causes.append({"level": "ok", "title": "進場分數有效",
+                           "text": f"70 分以上平均 {hi['avg']:+.1f}%（{hi['n']} 檔），未滿 50 分平均 {lo['avg']:+.1f}%（{lo['n']} 檔），高分股少跌 {gap:.1f}%。"})
+            fixes.append("只對 70 分以上（綠燈）的股票進場；未滿 50 分的只觀察、不買。")
+        elif gap <= -1:
+            causes.append({"level": "warn", "title": "今天進場分數沒幫上忙",
+                           "text": f"70 分以上平均 {hi['avg']:+.1f}%，反而比未滿 50 分的 {lo['avg']:+.1f}% 差，要多看幾天再判斷。"})
+    if len(hot) >= 2 and cold:
+        ha, ca = _avg([r["day_chg"] for r in hot]), _avg([r["day_chg"] for r in cold])
+        if ha is not None and ca is not None and ha <= ca - 1:
+            causes.append({"level": "warn", "title": "漲多的跌最兇",
+                           "text": f"之前 20 日已漲 20% 以上的 {len(hot)} 檔平均 {ha:+.1f}%，其他股票平均 {ca:+.1f}%。獲利了結賣壓集中在漲多股。"})
+            fixes.append("20 日已漲超過 20% 的不追高，等回測月線（20 日線）站穩再進。")
+    if by_ind and by_ind[0]["avg"] is not None and avg is not None and by_ind[0]["avg"] <= avg - 1.5:
+        w = by_ind[0]
+        causes.append({"level": "warn", "title": f"{w['name']}族群拖累",
+                       "text": f"{w['n']} 檔平均 {w['avg']:+.1f}%，比整份名單平均差 {avg - w['avg']:.1f}%。同族群放太多檔，風險會集中。"})
+        fixes.append("同一個產業最多放 2～3 檔，分散族群風險。")
+    stop = [r for r in rows if r.get("ret") is not None and r["ret"] <= -8]
+    if stop:
+        names = "、".join(f"{r['code']} {r.get('name') or ''}".strip() for r in stop[:6])
+        causes.append({"level": "danger", "title": f"{len(stop)} 檔已跌破 -8% 停損線", "text": names})
+        fixes.append("加入後跌超過 8% 的照紀律出場（擂台也是這條規則），不要凹單。")
+    if not fixes:
+        fixes.append("今天沒有明顯的系統性問題，照原本規則繼續追蹤。")
+    sel_sorted = sorted(sel, key=lambda r: r["day_chg"])
+    return {"date": market.get("date"), "n": n, "avg": avg, "bench_chg": _r(bench), "beat": len(beat),
+            "losers": len(losers), "up": up, "down": down, "above_ma60_pct": _r(market.get("above_ma60_pct"), 1),
+            "worst": [item(r) for r in sel_sorted[:3]], "best": [item(r) for r in sel_sorted[::-1][:3]],
+            "by_bucket": by_bucket, "by_source": by_source, "by_industry": by_ind[:5],
+            "causes": causes, "fixes": fixes}
+
+
+def review_md(rv: dict) -> str:
+    """每日檢討存成 Markdown（週六檢討會議用）。"""
+    f = lambda v: "—" if v is None else f"{v:+.2f}%"  # noqa: E731
+    lines = [f"# 觀察名單每日檢討 {rv.get('date')}", "",
+             f"- 觀察 {rv['n']} 檔：平均 {f(rv['avg'])}，0050 {f(rv['bench_chg'])}，贏 0050 {rv['beat']} 檔，下跌 {rv['losers']} 檔",
+             f"- 全市場：上漲 {rv['up']} 家、下跌 {rv['down']} 家，站上季線 {rv.get('above_ma60_pct')}%", "", "## 主因"]
+    lines += [f"- **{c['title']}**：{c['text']}" for c in rv["causes"]] or ["- （無）"]
+    lines += ["", "## 修正方向"] + [f"- {x}" for x in rv["fixes"]]
+    lines += ["", "## 跌最多", *[f"- {w['code']} {w.get('name') or ''} {f(w['day_chg'])}（分數 {w.get('entry')}，{w.get('source')}）" for w in rv["worst"]]]
+    lines += ["", "## 最抗跌", *[f"- {w['code']} {w.get('name') or ''} {f(w['day_chg'])}（分數 {w.get('entry')}，{w.get('source')}）" for w in rv["best"]]]
+    lines += ["", "## 進場分數分組", *[f"- {b['name']}：{b['n']} 檔，平均 {f(b['avg'])}" for b in rv["by_bucket"]]]
+    lines += ["", "## 戰術分組", *[f"- {b['name']}：{b['n']} 檔，平均 {f(b['avg'])}" for b in rv["by_source"]]]
+    lines += ["", "_規則化判讀，不是投資建議。_", ""]
+    return "\n".join(lines)

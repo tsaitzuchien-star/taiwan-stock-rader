@@ -655,7 +655,47 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if n:
                 rep["live"] = {"time": hub.market_time, "count": n,
                                "closed": now.strftime("%H:%M") >= "13:31"}
+        rep["review"] = _watch_review(rep, cache)
         return rep
+
+    def _watch_review(rep: dict, cache: dict) -> dict | None:
+        """觀察名單每日檢討（盤中用即時報價，收盤後用資料庫）。"""
+        if not rep["rows"]:
+            return None
+        try:
+            b = breadth()
+            q = engine.yuanta.quotes() if rep.get("live") else {}
+            bq = q.get(radar_watch.BENCH) or {}
+            if bq.get("price") and bq.get("prev_close"):
+                bench = (bq["price"] / bq["prev_close"] - 1) * 100
+            else:
+                g = cache["bars"][cache["bars"]["code"] == radar_watch.BENCH].sort_values("date")
+                bench = (float(g["close"].iloc[-1]) / float(g["close"].iloc[-2]) - 1) * 100 if len(g) >= 2 else None
+            df = cache["df"].set_index("股票代號")
+            codes = {r["code"] for r in rep["rows"]}
+            extra = {c: {"ret20": float(df.at[c, "20日漲幅(%)"])} for c in codes
+                     if c in df.index and df.at[c, "20日漲幅(%)"] == df.at[c, "20日漲幅(%)"]}
+            try:
+                a = engine.alpha()["df"]
+                for c, ind in zip(a["code"], a["industry"]):
+                    if c in codes and isinstance(ind, str) and ind:
+                        extra.setdefault(c, {})["industry"] = ind
+            except Exception:  # noqa: BLE001
+                pass
+            market = {"date": b.get("latest"), "bench_chg": bench, "up": b.get("up"), "down": b.get("down"),
+                      "above_ma60_pct": b.get("above_ma60_pct")}
+            rv = radar_watch.daily_review(rep["rows"], market, extra)
+            if rv and not rep.get("live") and rv.get("date"):
+                try:   # 收盤後的檢討存檔：data/觀察名單紀錄/每日檢討/YYYY-MM-DD.md
+                    folder = Path(settings.db_path).parent / "觀察名單紀錄" / "每日檢討"
+                    folder.mkdir(parents=True, exist_ok=True)
+                    (folder / f"{rv['date']}.md").write_text(radar_watch.review_md(rv), encoding="utf-8-sig")
+                    rv["saved"] = str(folder / f"{rv['date']}.md")
+                except OSError:
+                    pass
+            return rv
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
 
     @app.post("/api/watch")
     def watch_add(req: WatchRequest):

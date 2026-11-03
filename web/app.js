@@ -1160,6 +1160,36 @@ function WatchStats({ title, sub, list }) {
   </section>`;
 }
 
+function WatchReview({ rv, live }) {
+  if (!rv) return null;
+  if (rv.error) return html`<section class="panel"><div class="ph">每日檢討</div><div class="empty">檢討資料算不出來：${rv.error}</div></section>`;
+  const pc = (v) => html`<span class=${`num ${cls(v)}`}>${v == null ? '—' : signed(v, 2, '%')}</span>`;
+  const lvl = { danger: 'danger', warn: 'warn', ok: 'ok' };
+  const grp = (title, list) => (!list?.length ? null : html`<div><div class="mut rvh">${title}</div>
+    ${list.map((b) => html`<div class="kv"><span>${b.name} <span class="mut">${b.n} 檔</span></span>${pc(b.avg)}</div>`)}</div>`);
+  const stk = (title, list) => html`<div><div class="mut rvh">${title}</div>
+    ${list.map((w) => html`<a class="kv" href=${`#/stock/${w.code}`}><span><span class="num acc">${w.code}</span> ${w.name}${' '}<span class="mut">${w.entry ?? '—'} 分${w.industry ? ` · ${w.industry}` : ''}</span></span>${pc(w.day_chg)}</a>`)}</div>`;
+  return html`<section class="panel">
+    <div class="ph">每日檢討 ${rv.date || ''}${live ? html` <span class="tag hot">${live.closed ? '今日收盤' : '盤中即時'}</span>` : ''}
+      <span class="sub">今天為什麼賺／賠、哪一類股票最傷、之後怎麼修正 · 規則化判讀，不是投資建議${rv.saved ? ' · 已存檔到 data\\觀察名單紀錄\\每日檢討' : ''}</span></div>
+    <div class="pb rvgrid">
+      <div class="kpi"><div class="label">觀察股今天平均</div><div class=${`value ${cls(rv.avg)}`}>${rv.avg == null ? '—' : signed(rv.avg, 2, '%')}</div>
+        <div class="subv mut">0050 ${rv.bench_chg == null ? '—' : signed(rv.bench_chg, 2, '%')} · 贏 0050 ${rv.beat}/${rv.n} 檔</div></div>
+      <div class="kpi"><div class="label">全市場</div><div class="value"><span class="up">${rv.up}</span> <span class="mut" style="font-size:16px">漲</span> <span class="dn">${rv.down}</span> <span class="mut" style="font-size:16px">跌</span></div>
+        <div class="subv mut">站上季線 ${rv.above_ma60_pct ?? '—'}%</div></div>
+    </div>
+    <div class="pb" style="display:flex;flex-direction:column;gap:10px;padding-top:0">
+      ${rv.causes.map((c) => html`<div class=${`verdict ${lvl[c.level] || 'warn'}`}><h3>${c.title}</h3>${c.text}</div>`)}
+      <div class="verdict ok" style="border-color:var(--line);background:var(--panel-2)"><h3 style="color:var(--accent)">修正方向</h3>
+        <ol style="margin:0;padding-left:20px">${rv.fixes.map((x) => html`<li>${x}</li>`)}</ol></div>
+    </div>
+    <div class="pb rvcols">
+      ${stk('跌最多', rv.worst)}${stk('最抗跌', rv.best)}
+      ${grp('進場分數分組（今天平均）', rv.by_bucket)}${grp('戰術分組（今天平均）', rv.by_source)}${grp('產業（2 檔以上）', rv.by_industry)}
+    </div>
+  </section>`;
+}
+
 function WatchPage({ health }) {
   const [rep, setRep] = useState(null);
   const [err, setErr] = useState('');
@@ -1179,6 +1209,7 @@ function WatchPage({ health }) {
   if (err) return html`<div class="panel"><div class="empty up">${err}</div></div>`;
   if (!rep) return html`<div class="panel"><div class="empty">讀取中…</div></div>`;
   return html`
+    <${WatchReview} rv=${rep.review} live=${rep.live} />
     <section class="panel">
       <div class="ph">觀察名單${rep.live ? html` <span class="tag hot">${rep.live.closed ? '今日收盤' : '盤中即時'} ${rep.live.time || ''}</span>` : ''}<span class="sub">以加入當天收盤價為基準 · 今日 = 今天漲跌 · 每日進度 = 加入後每個交易日收盤的累計報酬（D1 = 第 1 天） · 3 天／1 週／2 週 = 之後第 3／5／10 個交易日收盤 · 平日 18:30 自動更新</span></div>
       ${!rep.rows.length ? html`<div class="empty">還沒有觀察的股票。到 <a href="#/radar">雷達掃描</a> 或個股分析按「＋ 觀察」，就會記下當天的價格和進場分數。</div>` : html`

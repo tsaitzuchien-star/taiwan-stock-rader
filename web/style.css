@@ -267,3 +267,9 @@ tr.tot td { font-weight: 700; border-top: 1px solid var(--line-strong); }
 .wday { display: inline-flex; flex-direction: column; align-items: center; min-width: 46px; padding: 2px 4px;
   border: 1px solid var(--line); border-radius: 6px; font-family: var(--mono); font-size: 11.5px; }
 .wday i { font-style: normal; font-size: 10px; color: var(--muted); }
+
+/* 觀察名單每日檢討 */
+.rvgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.rvcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; padding-top: 0; }
+.rvcols .kv { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: 13px; }
+.rvh { font-size: 12px; margin-bottom: 4px; }
