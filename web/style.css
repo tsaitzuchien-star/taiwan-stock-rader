@@ -259,3 +259,17 @@ tr.tot td { font-weight: 700; border-top: 1px solid var(--line-strong); }
 .chart.intraday { height: 260px; }
 .ibar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; padding: 0 8px 6px; font-size: 13px; }
 .ibar .big { font-size: 22px; font-weight: 700; }
+
+/* 觀察名單：股票欄固定在左邊（手機橫向滑動時還看得到是哪一檔）＋每日進度 */
+.watchtbl .stick { position: sticky; left: 0; z-index: 1; background: var(--panel); white-space: nowrap; box-shadow: 1px 0 0 var(--line); }
+.watchtbl thead .stick { z-index: 2; }
+.wpath { display: flex; gap: 4px; flex-wrap: nowrap; }
+.wday { display: inline-flex; flex-direction: column; align-items: center; min-width: 46px; padding: 2px 4px;
+  border: 1px solid var(--line); border-radius: 6px; font-family: var(--mono); font-size: 11.5px; }
+.wday i { font-style: normal; font-size: 10px; color: var(--muted); }
+
+/* 觀察名單每日檢討 */
+.rvgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.rvcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; padding-top: 0; }
+.rvcols .kv { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: 13px; }
+.rvh { font-size: 12px; margin-bottom: 4px; }

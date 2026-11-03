@@ -45,6 +45,8 @@ def test_tracks_horizons_and_stats(tmp_path):
     assert r["2330"]["d3"] == pytest.approx((1.01 ** 3 - 1) * 100, abs=0.01)
     assert r["2330"]["d10"] == pytest.approx((1.01 ** 10 - 1) * 100, abs=0.01)
     assert r["6488"]["d5"] < 0 and r["2330"]["days"] == 19
+    assert len(r["2330"]["path"]) == 10 and r["2330"]["day_chg"] == pytest.approx(1.0, abs=0.01)
+    assert r["2330"]["path"][-1]["ret"] == r["2330"]["ret"]
     assert r["2330"]["d5_bench"] == pytest.approx((100 + 65 * 0.1) / (100 + 60 * 0.1) * 100 - 100, abs=0.01)
     st = rep["stats"][0]
     assert st["name"] == "老牛翻身" and st["n"] == 2 and st["d5"]["win"] == 50 and st["d5"]["beat"] == 50
@@ -85,3 +87,33 @@ def test_apply_live_quotes():
     assert r["live"] and r["last"] == 105.0 and r["ret"] == 5.0
     assert r["max_up"] == 7.0 and r["max_dn"] == -2.0 and r["bench_ret"] == 2.0
     assert "live" not in rows[1]
+
+
+def test_daily_path_and_day_change(tmp_path):
+    from radar.watch import apply_live
+    rows = [{"code": "2330", "added_date": "2026-11-02", "price": 100.0, "last": 102.0, "days": 1,
+             "path": [{"d": "2026-11-03", "ret": 2.0}]}]
+    apply_live(rows, {"2330": {"price": 105.0, "prev_close": 102.0}}, "2026-11-04")
+    r = rows[0]
+    assert r["day_chg"] == 2.94 and r["path"][-1] == {"d": "2026-11-04", "ret": 5.0, "live": True}
+    assert len(r["path"]) == 2
+
+
+def test_daily_review_crash_day():
+    rows = [
+        {"code": "A", "name": "甲", "day_chg": -2.5, "ret": -2.5, "entry": 74, "source": "法人選股"},
+        {"code": "B", "name": "乙", "day_chg": -2.7, "ret": -2.7, "entry": 72, "source": "法人選股"},
+        {"code": "C", "name": "丙", "day_chg": -9.8, "ret": -9.8, "entry": 22, "source": "妖股獵人"},
+        {"code": "D", "name": "丁", "day_chg": -10.0, "ret": -10.0, "entry": 40, "source": "妖股獵人"},
+        {"code": "E", "name": "戊", "day_chg": -8.6, "ret": -8.6, "entry": 57, "source": "妖股獵人"},
+    ]
+    extra = {"C": {"ret20": 25.0, "industry": "半導體"}, "D": {"ret20": 30.0, "industry": "半導體"},
+             "E": {"ret20": 5.0, "industry": "半導體"}, "A": {"ret20": 1.0}, "B": {"ret20": 2.0}}
+    rv = W.daily_review(rows, {"date": "2026-11-03", "bench_chg": -3.4, "up": 120, "down": 1796, "above_ma60_pct": 19.4}, extra)
+    titles = " ".join(c["title"] for c in rv["causes"])
+    assert "大盤系統性重挫" in titles and "比大盤多跌" in titles and "進場分數有效" in titles
+    assert "漲多的跌最兇" in titles and "半導體族群拖累" in titles and "停損線" in titles
+    assert rv["worst"][0]["code"] == "D" and rv["best"][0]["code"] == "A" and rv["beat"] == 2
+    assert any("大盤濾網" in f for f in rv["fixes"])
+    md = W.review_md(rv)
+    assert "大盤系統性重挫" in md and "D 丁" in md

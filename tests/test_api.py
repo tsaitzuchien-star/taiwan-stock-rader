@@ -146,3 +146,18 @@ def test_monster_tactic_finds_base_breakout_limit_up(tmp_path):
 def test_intraday_needs_yuanta(client):
     r = client.get("/api/stock/1101/intraday").json()
     assert r["available"] is False and "元大" in r["reason"]
+
+
+def test_auto_update_schedule(tmp_path):
+    from datetime import datetime as DT
+    from radar.api.server import Engine
+    from radar.config import load_settings
+    s = load_settings()
+    s.db_path = tmp_path / "a.db"
+    e = Engine(s)
+    assert not e.auto_update_due(DT(2026, 11, 3, 17, 0))     # 還沒收盤後
+    assert e.auto_update_due(DT(2026, 11, 3, 18, 31))        # 第一次
+    assert not e.auto_update_due(DT(2026, 11, 3, 19, 0))     # 同一時段不重跑
+    assert e.auto_update_due(DT(2026, 11, 3, 21, 31))        # 資料還不是今天 → 晚間補一次
+    assert not e.auto_update_due(DT(2026, 11, 3, 23, 0))
+    assert not e.auto_update_due(DT(2026, 11, 7, 19, 0))     # 週六不跑

@@ -398,8 +398,42 @@ def test_hub_intraday_uses_kline_then_live_minutes(monkeypatch):
     hub.connect()
     with hub.client._lock:
         hub.client._record_minute("2330", {"price": 10.5, "total_vol": 9, "time": "09:02:00"}, now=DT.now())
+    hub.client._record_minute = lambda *a, **k: None   # 測試在盤中時段跑時，假報價不要再多記一根
     r = hub.intraday("2330", "TWSE")
     assert [b[0] for b in r["bars"]] == ["09:01", "09:02"] and r["source"] == "1 分 K"
     assert "2330" in hub.client.subscribed
     hub.intraday("2330", "TWSE")
     assert sum(1 for x in t.calls if x[0] == "GetKLine") == 1   # 30 秒內不重查
+
+
+def test_intraday_kline_tries_date_styles():
+    from datetime import datetime as DT
+    c, t = make_client()
+    c.connect()
+    c._kline_minute_type = 1
+    seen = []
+
+    def get_kline(acct, kind, market, code, start, end):
+        seen.append((start, end))
+        if " " not in start:        # 只接受「日期 + 時間」的寫法
+            return False
+        t._emit(1, 999, "GetKLine", NS(KLineList=[NS(TimeStamp=DT(2026, 11, 3, 9, 1), OpenPrice=10, HighPrice=11,
+                                                     LowPrice=9.5, ClosePrice=10.5, DealVol=12)]))
+        return True
+    t.GetKLine = get_kline
+    df = c.intraday_kline("3374", "TPEX", date(2026, 11, 3))
+    assert list(df["time"]) == ["09:01"] and len(seen) == 4
+    assert c._kline_date_style == "yyyy/MM/dd HH:mm:ss"
+    seen.clear()
+    c.intraday_kline("3374", "TPEX", date(2026, 11, 3))
+    assert len(seen) == 1                   # 記住成功的寫法，下次直接用
+
+
+def test_intraday_kline_all_rejected_reports_daily_probe():
+    c, t = make_client()
+    c.connect()
+    c._kline_minute_type = 1
+    t.GetKLine = lambda *a: False
+    with pytest.raises(YuantaError) as e:
+        c.intraday_kline("3374", "TPEX", date(2026, 11, 3))
+    assert "試過的日期寫法" in str(e.value) and "日線查詢：也失敗" in str(e.value)

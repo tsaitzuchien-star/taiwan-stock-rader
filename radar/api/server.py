@@ -45,6 +45,9 @@ COLMAP = {
 }
 
 
+AUTO_UPDATE_TIMES = (("收盤後", (18, 30)), ("晚間補抓", (21, 30)))
+
+
 class Engine:
     """把資料庫與指標計算包起來；同一個交易日的計算結果會快取。"""
 
@@ -58,6 +61,7 @@ class Engine:
         self.arena_job: dict = {"running": False}
         self.yuanta = YuantaHub(settings)
         self._arena_lock = threading.Lock()
+        self._auto_done: dict[str, set] = {}
 
     def health(self) -> dict:
         with self.lock:
@@ -142,6 +146,51 @@ class Engine:
             return radar_entry.alpha_lookup(self.alpha()["df"])
         except Exception:  # noqa: BLE001
             return {}
+
+    # ---------------------------------------------------------------- 資料庫更新
+    def start_update(self, auto: bool = False) -> dict:
+        job = self.update_job
+        if job.get("running"):
+            return job
+        job.clear()
+        job.update({"running": True, "message": "準備中…", "progress": 0.0, "auto": auto,
+                    "started": datetime.now().isoformat(timespec="seconds")})
+
+        def run():
+            def progress(msg, frac):
+                job.update({"message": msg, "progress": round(min(max(frac, 0), 1), 3)})
+            try:
+                # 收集器用自己的資料庫連線，不卡住畫面查詢
+                report = radar_collect.update(Store(self.settings.db_path), self.settings, progress=progress)
+                job.update({"summary": report.summary(), "errors": report.errors[:20]})
+            except Exception as e:  # noqa: BLE001
+                job.update({"errors": [str(e)], "summary": "更新失敗"})
+            finally:
+                self.invalidate()
+                job.update({"running": False, "progress": 1.0,
+                            "finished": datetime.now().isoformat(timespec="seconds")})
+                self.arena_refresh()   # 新的交易日：擂台自動補算
+        threading.Thread(target=run, daemon=True).start()
+        return job
+
+    def auto_update_due(self, now: datetime | None = None) -> bool:
+        """平日收盤後自動更新資料庫（擂台、觀察名單就會每天自己更新）。
+        18:30 跑第一次；跑完資料還不是今天（或有錯誤）就 21:30 再補一次；假日不跑。"""
+        now = now or datetime.now()
+        if now.weekday() >= 5 or self.update_job.get("running"):
+            return False
+        today = now.strftime("%Y-%m-%d")
+        reached = {name for name, hm in AUTO_UPDATE_TIMES if (now.hour, now.minute) >= hm}
+        done = self._auto_done.get(today, set())
+        if not reached or reached <= done:
+            return False
+        try:
+            with self.lock:
+                latest = str(self.store._conn.execute("SELECT MAX(date) FROM daily_bars").fetchone()[0] or "")[:10]
+        except Exception:  # noqa: BLE001
+            latest = ""
+        self._auto_done = {today: done | reached}
+        return latest < today
 
     # ---------------------------------------------------------------- 百萬操盤擂台
     def arena_refresh(self) -> None:
@@ -287,6 +336,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if path == "/" or (path.startswith("/static/") and "/vendor/" not in path):
             resp.headers["Cache-Control"] = "no-cache"
         return resp
+
+    @app.on_event("startup")
+    def _auto_update_db():
+        """平日 18:30 自動更新資料庫（晚上 21:30 再補一次），擂台與觀察名單每天自己更新。"""
+        def loop():
+            while True:
+                time.sleep(60)
+                try:
+                    if engine.auto_update_due():
+                        engine.start_update(auto=True)
+                except Exception:  # noqa: BLE001
+                    pass
+        threading.Thread(target=loop, daemon=True).start()
 
     @app.on_event("startup")
     def _auto_connect_yuanta():
@@ -593,7 +655,47 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if n:
                 rep["live"] = {"time": hub.market_time, "count": n,
                                "closed": now.strftime("%H:%M") >= "13:31"}
+        rep["review"] = _watch_review(rep, cache)
         return rep
+
+    def _watch_review(rep: dict, cache: dict) -> dict | None:
+        """觀察名單每日檢討（盤中用即時報價，收盤後用資料庫）。"""
+        if not rep["rows"]:
+            return None
+        try:
+            b = breadth()
+            q = engine.yuanta.quotes() if rep.get("live") else {}
+            bq = q.get(radar_watch.BENCH) or {}
+            if bq.get("price") and bq.get("prev_close"):
+                bench = (bq["price"] / bq["prev_close"] - 1) * 100
+            else:
+                g = cache["bars"][cache["bars"]["code"] == radar_watch.BENCH].sort_values("date")
+                bench = (float(g["close"].iloc[-1]) / float(g["close"].iloc[-2]) - 1) * 100 if len(g) >= 2 else None
+            df = cache["df"].set_index("股票代號")
+            codes = {r["code"] for r in rep["rows"]}
+            extra = {c: {"ret20": float(df.at[c, "20日漲幅(%)"])} for c in codes
+                     if c in df.index and df.at[c, "20日漲幅(%)"] == df.at[c, "20日漲幅(%)"]}
+            try:
+                a = engine.alpha()["df"]
+                for c, ind in zip(a["code"], a["industry"]):
+                    if c in codes and isinstance(ind, str) and ind:
+                        extra.setdefault(c, {})["industry"] = ind
+            except Exception:  # noqa: BLE001
+                pass
+            market = {"date": b.get("latest"), "bench_chg": bench, "up": b.get("up"), "down": b.get("down"),
+                      "above_ma60_pct": b.get("above_ma60_pct")}
+            rv = radar_watch.daily_review(rep["rows"], market, extra)
+            if rv and not rep.get("live") and rv.get("date"):
+                try:   # 收盤後的檢討存檔：data/觀察名單紀錄/每日檢討/YYYY-MM-DD.md
+                    folder = Path(settings.db_path).parent / "觀察名單紀錄" / "每日檢討"
+                    folder.mkdir(parents=True, exist_ok=True)
+                    (folder / f"{rv['date']}.md").write_text(radar_watch.review_md(rv), encoding="utf-8-sig")
+                    rv["saved"] = str(folder / f"{rv['date']}.md")
+                except OSError:
+                    pass
+            return rv
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
 
     @app.post("/api/watch")
     def watch_add(req: WatchRequest):
@@ -649,29 +751,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/db/update")
     def db_update():
-        job = engine.update_job
-        if job.get("running"):
-            return job
-        job.clear()
-        job.update({"running": True, "message": "準備中…", "progress": 0.0,
-                    "started": datetime.now().isoformat(timespec="seconds")})
-
-        def run():
-            def progress(msg, frac):
-                job.update({"message": msg, "progress": round(min(max(frac, 0), 1), 3)})
-            try:
-                # 收集器用自己的資料庫連線，不卡住畫面查詢
-                report = radar_collect.update(Store(settings.db_path), settings, progress=progress)
-                job.update({"summary": report.summary(), "errors": report.errors[:20]})
-            except Exception as e:  # noqa: BLE001
-                job.update({"errors": [str(e)], "summary": "更新失敗"})
-            finally:
-                engine.invalidate()
-                job.update({"running": False, "progress": 1.0,
-                            "finished": datetime.now().isoformat(timespec="seconds")})
-                engine.arena_refresh()   # 新的交易日：擂台自動補算
-        threading.Thread(target=run, daemon=True).start()
-        return job
+        return engine.start_update()
 
     @app.get("/api/db/update")
     def db_update_status():
