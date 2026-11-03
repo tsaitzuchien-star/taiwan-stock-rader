@@ -367,6 +367,9 @@ def test_minute_kline_type_lookup():
     c, _ = make_client()
     c._sdk.KLineType = NS(Day=11, Week=12, Min5=2, Min1=1, Min15=3)
     assert c.minute_kline_type() == 1
+    c3, _ = make_client()   # 正式元件的列舉名稱是中文
+    c3._sdk.KLineType = NS(**{"一分線": 1, "五分線": 2, "十五分線": 3, "日線": 11})
+    assert c3.minute_kline_type() == 1
     c2, _ = make_client()
     c2._sdk.KLineType = NS(Day=11, Week=12)
     assert c2.minute_kline_type() is None and c2._kline_minute_type is False
