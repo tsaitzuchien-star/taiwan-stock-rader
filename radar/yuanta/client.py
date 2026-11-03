@@ -19,7 +19,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field as dc_field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Iterable
@@ -240,6 +240,7 @@ class YuantaClient:
         self._minutes_day = ""
         self._kline_minute_type = None                  # 1 分 K 的列舉值（第一次用到時從元件裡找）
         self.kline_type_names: list[str] = []
+        self._kline_date_style: str | None = None       # 1 分 K 試成功的日期寫法
         self.subscribed: set[str] = set()
         self.messages: deque[str] = deque(maxlen=200)
         self.reports: deque[str] = deque(maxlen=200)
@@ -622,16 +623,57 @@ class YuantaClient:
         self._kline_minute_type = getattr(typ, pick) if pick else False
         return self._kline_minute_type or None
 
+    def _minute_date_variants(self, day: date) -> list[tuple[str, str, str]]:
+        """GetKLine 的日期參數寫法（元大文件沒寫清楚 1 分 K 要哪一種），依序試，成功的記下來。"""
+        nxt = day + timedelta(days=1)
+        return [
+            ("yyyy/MM/dd 同一天", day.strftime("%Y/%m/%d"), day.strftime("%Y/%m/%d")),
+            ("yyyy/MM/dd 到隔天", day.strftime("%Y/%m/%d"), nxt.strftime("%Y/%m/%d")),
+            ("yyyyMMdd", day.strftime("%Y%m%d"), day.strftime("%Y%m%d")),
+            ("yyyy/MM/dd HH:mm:ss", day.strftime("%Y/%m/%d") + " 09:00:00", day.strftime("%Y/%m/%d") + " 13:30:00"),
+            ("yyyy-MM-dd", day.strftime("%Y-%m-%d"), day.strftime("%Y-%m-%d")),
+            ("前 7 天到今天", (day - timedelta(days=7)).strftime("%Y/%m/%d"), day.strftime("%Y/%m/%d")),
+        ]
+
     def intraday_kline(self, code: str, market: str, day: date) -> pd.DataFrame:
-        """今天的 1 分 K（元大規定 1 分 K 單次最多 20 天，這裡只查一天）。"""
+        """今天的 1 分 K（元大規定 1 分 K 單次最多 20 天）。"""
         kind = self.minute_kline_type()
         if kind is None:
             raise YuantaError("元大元件裡找不到 1 分 K 類型")
-        d = day.strftime("%Y/%m/%d")
-        r = self._request("GetKLine", lambda: self._api.GetKLine(
-            self.account, kind, self._market_enum(market), code, d, d), interval=KLINE_INTERVAL)
-        df = parsers.parse_kline_minutes(r)
-        return df[(df["date"] == day) & df["time"].notna()] if not df.empty else df
+        variants = self._minute_date_variants(day)
+        if self._kline_date_style is not None:
+            variants = [v for v in variants if v[0] == self._kline_date_style] or variants
+        rejected = []
+        for label, start, end in variants:
+            try:
+                r = self._request("GetKLine", lambda: self._api.GetKLine(
+                    self.account, kind, self._market_enum(market), code, start, end), interval=KLINE_INTERVAL)
+            except YuantaError as e:
+                if "回傳 False" not in str(e):
+                    raise
+                rejected.append(label)
+                continue
+            if self._kline_date_style != label:
+                self._note(f"1 分 K 日期寫法：{label}")
+            self._kline_date_style = label
+            df = parsers.parse_kline_minutes(r)
+            return df[(df["date"] == day) & df["time"].notna()] if not df.empty else df
+        self._kline_date_style = None
+        daily = self._probe_daily_kline(code, market, day)
+        raise YuantaError("GetKLine 送出失敗（元件回傳 False；試過的日期寫法：" + "、".join(rejected)
+                          + f"；同一檔日線查詢：{daily}）")
+
+    def _probe_daily_kline(self, code: str, market: str, day: date) -> str:
+        """1 分 K 全部被拒時，試一次日線，分辨是「1 分 K 不給查」還是「GetKLine 整個不能用」。"""
+        try:
+            typ = self._sdk.KLineType
+            kind = getattr(typ, "日線", None) or typ(11)
+            r = self._request("GetKLine", lambda: self._api.GetKLine(
+                self.account, kind, self._market_enum(market), code,
+                (day - timedelta(days=20)).strftime("%Y/%m/%d"), day.strftime("%Y/%m/%d")), interval=KLINE_INTERVAL)
+            return f"成功 {len(parsers.parse_kline(r))} 筆"
+        except Exception as e:  # noqa: BLE001
+            return f"也失敗（{e}）"
 
     def minute_bars(self, code: str) -> list[tuple]:
         """自己累積的今天分鐘線：[(HH:MM, 開, 高, 低, 收, 當分鐘量)]。"""
