@@ -205,3 +205,43 @@ def test_journal_api(tmp_path):
     md = client.get("/api/arena/week.md", params={"start": w["weeks"][-1]})
     assert md.status_code == 200 and "百萬擂台週報" in md.text and "attachment" in md.headers["content-disposition"]
     assert "每日日誌" in client.get("/api/arena/day.md").text
+
+
+def test_market_regime_modes():
+    today = pd.DataFrame({"close": [97.0, 90.0, 101.0]}, index=["0050", "1101", "1102"])
+    prev = pd.DataFrame({"close": [100.0, 100.0, 100.0]}, index=["0050", "1101", "1102"])
+    df = pd.DataFrame({"price": [10, 10, 10, 10], "ma60": [9, 11, 11, 11]})
+    r = A.market_regime(today, prev, df)
+    assert r["mode"] == "pause" and "0050 -3.0%" in r["text"]
+    calm = pd.DataFrame({"close": [100.5, 101.0, 99.0]}, index=["0050", "1101", "1102"])
+    r2 = A.market_regime(calm, prev, df)
+    assert r2["mode"] == "half" and r2["above_ma60"] == 25.0
+    r3 = A.market_regime(calm, prev, pd.DataFrame({"price": [10, 10], "ma60": [9, 9]}))
+    assert r3["mode"] == "normal"
+
+
+def test_filter_pause_blocks_new_buys(tmp_path, monkeypatch):
+    monkeypatch.setattr(A, "FILTER_SINCE", DAYS[0])
+    monkeypatch.setattr(A, "FILTER_BENCH_DROP", 100.0)   # 每天都觸發「暫停新進場」
+    a = A.Arena(_db(tmp_path / "p.db"))
+    st = a.run()
+    r = a.report()
+    assert not [t for t in r["recent_trades"] if t["side"] == "buy"] and not st["positions"]
+    assert r["regime"]["mode"] == "pause"
+
+
+def test_filter_rechecks_orders_decided_before_upgrade(tmp_path, monkeypatch):
+    path = tmp_path / "u.db"
+    monkeypatch.setattr(A, "FILTER_SINCE", "9999-12-31")
+    a = A.Arena(_db(path, upto=61))
+    st = a.run()
+    for o in st["orders"]:            # 舊版程式存下的委託沒有 regime 欄位
+        o.pop("regime", None)
+    a._put_state(st)
+    assert any(o["side"] == "buy" for o in st["orders"])
+    monkeypatch.setattr(A, "FILTER_SINCE", DAYS[0])
+    monkeypatch.setattr(A, "FILTER_BENCH_DROP", 100.0)
+    s = _db(path)
+    A.Arena(s).run()
+    rows = s._conn.execute("SELECT status FROM arena_orders WHERE exec_date=? AND side='buy'", (DAYS[61],)).fetchall()
+    assert rows and all(r[0].startswith("大盤濾網") for r in rows)
