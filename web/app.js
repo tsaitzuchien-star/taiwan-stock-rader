@@ -375,6 +375,11 @@ function ArenaPage({ health }) {
       <span class="sub">雷達用法人評分每天模擬操作 100 萬元（不是真的下單）·
         ${a?.ready ? html`開賽 ${a.start}${a.fresh ? ' · 全程實戰（沒有回測）' : a.live_since ? ` · ${a.live_since} 起為實戰` : ` · ${a.last} 以前為回測，下一個交易日起實戰`}` : ''}</span></div>
       ${!a?.ready && html`<${ArenaWaiting} a=${a} err=${err} />`}
+      ${a?.regime && a.regime.mode !== 'normal' && a.regime.date >= '2026-11-03' && html`<div class="pb" style="padding-top:0">
+        <div class=${`verdict ${a.regime.mode === 'pause' ? 'danger' : 'warn'}`}><h3>${a.regime.text}</h3>
+          ${a.regime.date} 收盤後判定 · 0050 ${a.regime.bench_chg == null ? '—' : signed(a.regime.bench_chg, 1, '%')} ·
+          下跌家數 ${a.regime.down_ratio == null ? '—' : `${Math.round(a.regime.down_ratio * 100)}%`} ·
+          站上季線 ${a.regime.above_ma60 == null ? '—' : `${Math.round(a.regime.above_ma60)}%`} · 持股的停損停利照常執行</div></div>`}
     </div>
     ${a?.ready && html`
     <section class="grid g-kpi">

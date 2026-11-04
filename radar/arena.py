@@ -26,6 +26,10 @@ MIN_FEE = 20
 TAX_RATE = 0.003
 BENCHMARK = "0050"
 MIN_HISTORY = 60   # 開賽前至少要有幾天日 K
+FILTER_SINCE = "2026-11-03"   # 大盤濾網從這天收盤後的決策開始套用（使用者 2026-11-04 同意）
+FILTER_BENCH_DROP = -1.5      # 0050 單日跌幅（%）
+FILTER_DOWN_RATIO = 0.75      # 下跌家數比例
+FILTER_ABOVE_MA60 = 30.0      # 站上季線比例（%）
 
 RULES = {
     "entry": [
@@ -33,6 +37,7 @@ RULES = {
         "月均量 ≥ 1,000 張（流動性夠，進出不卡）",
         "收盤站上季線，當天漲幅 < 7%（不追漲停）",
         "依總分由高到低補滿 8 檔，每檔約總資產的 1/8",
+        "大盤濾網（2026-11-04 起）：0050 當天跌超過 1.5%，或全市場下跌家數超過 75% → 暫停新進場；站上季線的股票不到 30% → 新進場部位減半",
     ],
     "exit": [
         "虧損達 8%：停損",
@@ -170,7 +175,22 @@ class Arena:
         orders, st["orders"] = st["orders"], []
         for o in [o for o in orders if o["side"] == "sell"]:
             self._log_order(d, o, *self._sell(st, d, o, today, prev, data))
-        for o in [o for o in orders if o["side"] == "buy"]:
+        buys = [o for o in orders if o["side"] == "buy"]
+        if buys and prev is not None and "regime" not in buys[0] and buys[0].get("decided", "") >= FILTER_SINCE:
+            # 濾網上線前就決定好的委託：用決策當天的大盤補判一次
+            prev_days2 = [x for x in data["by_day"] if x < buys[0]["decided"]]
+            pp = data["by_day"][max(prev_days2)] if prev_days2 else None
+            rg = market_regime(prev, pp, self._alpha_asof(buys[0]["decided"], data))
+            for o in buys:
+                o["regime"] = rg["mode"]
+                if rg["mode"] == "half":
+                    o["budget"] = o["budget"] / 2
+                    o["reason"] = o.get("reason", "") + "・大盤濾網：部位減半"
+            if rg["mode"] == "pause":
+                for o in buys:
+                    self._log_order(d, o, rg["text"], None)
+                buys = []
+        for o in buys:
             self._log_order(d, o, *self._buy(st, d, o, today, prev, data))
 
         # 2) 收盤結算
@@ -192,7 +212,9 @@ class Arena:
 
         # 3) 收盤後決策（隔天開盤執行）
         df = self._alpha_asof(d, data)
-        st["orders"] = [{**o, "decided": d} for o in self._decide(st, df, nav)]
+        regime = market_regime(today, prev, df) if d >= FILTER_SINCE else {"mode": "normal", "text": "（濾網啟用前）"}
+        st["regime"] = {**regime, "date": d}
+        st["orders"] = [{**o, "decided": d, "regime": regime["mode"]} for o in self._decide(st, df, nav, regime)]
         st["nav"] = nav
 
     def _alpha_asof(self, d: str, data: dict) -> pd.DataFrame:
@@ -208,7 +230,8 @@ class Arena:
             rev = rev[pub <= d]
         return alpha.build(base, bars.drop(columns="d"), inst, margin, val, rev, data["company"], data["markets"])
 
-    def _decide(self, st: dict, df: pd.DataFrame, nav: float) -> list[dict]:
+    def _decide(self, st: dict, df: pd.DataFrame, nav: float, regime: dict | None = None) -> list[dict]:
+        mode = (regime or {}).get("mode", "normal")
         orders = []
         rows = df.set_index("code") if not df.empty else pd.DataFrame()
         selling = set()
@@ -230,16 +253,17 @@ class Arena:
                 orders.append({"side": "sell", "code": code, "name": p["name"], "reason": reason})
                 selling.add(code)
         slots = MAX_POSITIONS - (len(st["positions"]) - len(selling))
-        if slots > 0 and not rows.empty:
+        if slots > 0 and not rows.empty and mode != "pause":
             c = rows[(rows["score"] >= 75) & (rows["s_chip"] >= 60) & (rows["vol20"] >= 1000)
                      & (rows["price"] >= rows["ma60"]) & (rows["chg"] < 7)
                      & (~rows.index.str.startswith("00"))   # ETF 不算，只比選股功力
                      & (~rows.index.isin(list(st["positions"])))].sort_values("score", ascending=False)
-            budget = nav / MAX_POSITIONS
+            budget = nav / MAX_POSITIONS * (0.5 if mode == "half" else 1)
             for code, r in c.head(slots).iterrows():
                 orders.append({"side": "buy", "code": code, "name": r["name"], "budget": budget,
                                "score": round(float(r["score"]), 1), "why": _why(r, len(rows)),
-                               "reason": f"評分 {r['score']:.0f}" + (f"・{'、'.join(r['tags'][:3])}" if r["tags"] else "")})
+                               "reason": f"評分 {r['score']:.0f}" + (f"・{'、'.join(r['tags'][:3])}" if r["tags"] else "")
+                               + ("・大盤濾網：部位減半" if mode == "half" else "")})
         return orders
 
     # ------------------------------------------------------------ 成交
@@ -360,9 +384,39 @@ class Arena:
             "win_rate": wins / len(sells) * 100 if len(sells) else None,
             "periods": periods,
             "curve": [{"date": r.date, "nav": r.nav, "bench": r.bench, "phase": r.phase} for r in nav.itertuples()],
-            "positions": positions, "orders": st.get("orders", []),
+            "positions": positions, "orders": st.get("orders", []), "regime": st.get("regime"),
             "recent_trades": json.loads(trades.head(60).to_json(orient="records", force_ascii=False)),
         })
+
+
+def market_regime(today: pd.DataFrame, prev: pd.DataFrame | None, df: pd.DataFrame) -> dict:
+    """大盤濾網：回傳 {"mode": "normal"|"half"|"pause", "text", 各項數字}。"""
+    out = {"mode": "normal", "bench_chg": None, "down_ratio": None, "above_ma60": None}
+    if prev is not None:
+        both = today[["close"]].join(prev[["close"]], rsuffix="_p", how="inner").dropna()
+        both = both[both["close_p"] > 0]
+        chg = both["close"] / both["close_p"] - 1
+        up, dn = int((chg > 0).sum()), int((chg < 0).sum())
+        out["down_ratio"] = dn / (up + dn) if up + dn else None
+        out["up"], out["down"] = up, dn
+        if BENCHMARK in chg.index:
+            out["bench_chg"] = float(chg[BENCHMARK] * 100)
+    if not df.empty and "ma60" in df and "price" in df:
+        ok = df[df["ma60"].notna() & df["price"].notna()]
+        if len(ok):
+            out["above_ma60"] = float((ok["price"] >= ok["ma60"]).mean() * 100)
+    why = []
+    if out["bench_chg"] is not None and out["bench_chg"] <= FILTER_BENCH_DROP:
+        why.append(f"0050 {out['bench_chg']:+.1f}%")
+    if out["down_ratio"] is not None and out["down_ratio"] >= FILTER_DOWN_RATIO:
+        why.append(f"下跌家數 {out['down_ratio'] * 100:.0f}%")
+    if why:
+        out["mode"], out["text"] = "pause", "大盤濾網：暫停新進場（" + "、".join(why) + "）"
+    elif out["above_ma60"] is not None and out["above_ma60"] < FILTER_ABOVE_MA60:
+        out["mode"], out["text"] = "half", f"大盤濾網：站上季線只有 {out['above_ma60']:.0f}%，新進場部位減半"
+    else:
+        out["text"] = "大盤正常"
+    return out
 
 
 def _why(r, universe: int) -> list[str]:
